@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>oh-my-line — Real-time statusline engine for Claude Code</title>
+<meta name="description" content="A real-time statusline engine for Claude Code. 65 segments, Config Builder, one-command install.">
+<script defer src="https://cloud.umami.is/script.js" data-website-id="3959744d-ae37-4c0c-b903-491de3801d1c"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-card: #161b22;
+    --bg-code: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #2563eb;
+    --accent-glow: rgba(37, 99, 235, 0.3);
+    --green: #3fb950;
+    --cyan: #39d2c0;
+    --orange: #ffb055;
+    --blue: #0099ff;
+    --red: #ff5555;
+    --yellow: #e6c800;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  code {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    background: var(--bg-code);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+
+  .mono {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  }
+
+  /* ── Layout ──────────────────────────────────────────── */
+
+  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── Nav ──────────────────────────────────────────────── */
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13, 17, 23, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+  nav .container { display: flex; justify-content: space-between; align-items: center; }
+  nav .logo { font-weight: 700; font-size: 1.1em; }
+  nav .logo span { color: var(--accent); }
+  nav .links { display: flex; gap: 24px; font-size: 0.95em; }
+  nav .links a { color: var(--text-dim); }
+  nav .links a:hover { color: var(--text); text-decoration: none; }
+
+  /* ── Hero ─────────────────────────────────────────────── */
+
+  .hero {
+    text-align: center;
+    padding: 80px 0 48px;
+    position: relative;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .hero > * { position: relative; z-index: 1; }
+  .hero h1 { font-size: 3em; font-weight: 800; margin-bottom: 16px; letter-spacing: -0.02em; }
+  .hero h1 span { color: var(--accent); }
+  .hero .subtitle { font-size: 1.25em; color: var(--text-dim); max-width: 600px; margin: 0 auto 32px; }
+
+  .hero .cta-row { display: flex; justify-content: center; gap: 12px; }
+  .btn {
+    display: inline-block; padding: 10px 24px; border-radius: 8px;
+    font-weight: 600; font-size: 0.95em; transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; text-decoration: none; }
+  .btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); text-decoration: none; }
+
+  /* ── Steps ──────────────────────────────────────────────── */
+
+  .steps { padding: 36px 0 40px; }
+  .steps h2 { text-align: center; font-size: 2em; margin-bottom: -4px; }
+
+  .step {
+    position: relative;
+    margin-bottom: 24px;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 28px;
+  }
+  .step:last-child { margin-bottom: 0; }
+
+  .step-label {
+    display: inline-block;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .step-caption {
+    font-size: 0.9em;
+    color: var(--text-dim);
+    margin-top: 4px;
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+
+  .step-visual {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .step-details {
+    margin-top: 8px;
+  }
+  .step-details summary {
+    font-size: 0.8em;
+    color: var(--text-dim);
+    cursor: pointer;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .step-details summary::-webkit-details-marker { display: none; }
+  .step-details summary::before {
+    content: '\25b8';
+    font-size: 0.9em;
+    transition: transform 0.15s;
+  }
+  .step-details[open] summary::before {
+    transform: rotate(90deg);
+  }
+  .step-details .detail-body {
+    margin-top: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    font-size: 0.82em;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+  .step-details .detail-body code {
+    font-size: 0.9em;
+  }
+  .detail-tree {
+    font-family: 'SF Mono', monospace;
+    font-size: 0.9em;
+    color: var(--text);
+    margin: 12px 0;
+    line-height: 1.8;
+  }
+  .detail-tree .dt-dir { color: var(--cyan); }
+  .detail-tree .dt-file { color: var(--text-dim); }
+  .detail-tree .dt-note { color: var(--text-dim); font-family: -apple-system, sans-serif; font-size: 0.85em; }
+  .detail-json {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    font-family: 'SF Mono', monospace;
+    font-size: 0.9em;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  /* Install tabs */
+  .install-details {
+    margin-top: 12px;
+  }
+  .install-details summary {
+    font-size: 0.82em;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    padding: 6px 0;
+  }
+  .install-details summary:hover {
+    color: var(--text);
+  }
+  .install-tabs {
+    display: flex; gap: 0; margin-top: 8px; border-bottom: 1px solid var(--border);
+  }
+  .install-tab {
+    padding: 8px 16px; font-size: 0.82em; font-weight: 600; cursor: pointer;
+    color: var(--text-dim); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s; user-select: none;
+  }
+  .install-tab:hover { color: var(--text); }
+  .install-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .install-panel {
+    display: none;
+    margin-top: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    font-size: 0.82em;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+  .install-panel.active { display: block; }
+  .manual-step {
+    margin-bottom: 16px;
+  }
+  .manual-step:last-child { margin-bottom: 0; }
+  .manual-step-num {
+    display: inline-block; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent); color: var(--bg); font-size: 0.75em; font-weight: 700;
+    text-align: center; line-height: 20px; margin-right: 8px;
+  }
+  .manual-cmd {
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 8px 0 0;
+    font-family: 'SF Mono', monospace;
+    font-size: 0.95em;
+    line-height: 1.5;
+    overflow-x: auto;
+  }
+
+  /* Step 1: install command */
+  .step-install {
+    padding: 20px 24px;
+    position: relative;
+  }
+  .step-install .term-bar {
+    display: flex; gap: 6px; margin-bottom: 14px;
+  }
+  .step-install .term-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .step-install pre {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.6em;
+    color: var(--green);
+    white-space: nowrap;
+    margin: 0;
+    line-height: 1.6;
+  }
+  .step-install pre .prompt { color: var(--text-dim); }
+  .step-install .copy-btn {
+    position: absolute; top: 14px; right: 14px;
+    background: var(--border); border: none; color: var(--text-dim);
+    padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 0.75em;
+  }
+  .step-install .copy-btn:hover { background: var(--accent); color: #fff; }
+
+  /* Step 2: terminal result */
+  .step-result {
+    padding: 0;
+  }
+  .step-result .sr-bar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 12px;
+    background: #1a1a2e;
+    border-bottom: 1px solid var(--border);
+  }
+  .step-result .sr-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim);
+  }
+  .step-result .sr-title {
+    font-size: 0.7em; color: var(--text-dim); margin-left: 8px;
+  }
+  .step-result .sr-body {
+    padding: 12px 10px 8px;
+    font-size: 0.85em;
+    color: var(--text-dim);
+  }
+  .step-result .sr-body .cursor {
+    display: inline-block;
+    width: 8px; height: 16px;
+    background: var(--accent);
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* WASM-rendered preview area */
+  .wasm-preview {
+    padding: 2px 16px;
+    background: var(--bg);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .wasm-preview .line { display: block; }
+
+  /* Fallback static statusline (hidden when WASM loads) */
+  .sr-statusline {
+    padding: 2px 16px;
+    background: var(--bg);
+    font-family: 'SF Mono', monospace;
+    font-size: 0.78em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Colour helpers */
+  .c-blue { color: var(--blue); }
+  .c-cyan { color: var(--cyan); }
+  .c-green { color: var(--green); }
+  .c-orange { color: var(--orange); }
+  .c-yellow { color: var(--yellow); }
+  .c-red { color: var(--red); }
+  .c-dim { color: var(--text-dim); }
+  .c-white { color: #dcdcdc; }
+  .c-accent { color: var(--accent); }
+
+  /* ── Interactive Demo (Step 3) ─────────────────────────── */
+
+  .demo-wrap {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .demo-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75em; color: var(--text-dim);
+  }
+  .demo-line-tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .demo-line-tab {
+    padding: 7px 16px;
+    font-size: 0.72em;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    user-select: none;
+    background: none;
+    border-top: none; border-left: none; border-right: none;
+  }
+  .demo-line-tab:hover { color: var(--text); }
+  .demo-line-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+  }
+  .demo-segments {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 12px 16px;
+  }
+  .demo-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.72em;
+    font-family: 'SF Mono', monospace;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.15s, border-color 0.15s;
+  }
+  .demo-chip .dot {
+    width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+  }
+  .demo-chip.off {
+    opacity: 0.35;
+    border-style: dashed;
+  }
+  .demo-chip:hover {
+    border-color: var(--accent);
+  }
+  .demo-sep {
+    padding: 6px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 0.65em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .demo-preview {
+    padding: 2px 16px;
+    background: #000;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    min-height: 20px;
+  }
+  .demo-preview .line { display: block; }
+
+  /* Loading spinner for WASM */
+  .wasm-loading {
+    text-align: center;
+    padding: 16px;
+    font-size: 0.8em;
+    color: var(--text-dim);
+  }
+  .wasm-loading .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Features ────────────────────────────────────────── */
+
+  .features { padding: 40px 0; }
+  .features h2 { text-align: center; font-size: 2em; margin-bottom: 28px; }
+  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .feature-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  .feature-card .icon { font-size: 1.6em; margin-bottom: 12px; }
+  .feature-card h3 { font-size: 1.1em; margin-bottom: 8px; }
+  .feature-card p { font-size: 0.9em; color: var(--text-dim); }
+
+  /* ── How-to tabs ───────────────────────────────────── */
+
+  .how-tabs {
+    display: flex; justify-content: center; gap: 0; margin: 16px auto 32px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 4px; max-width: 320px;
+  }
+  .how-tab {
+    flex: 1; padding: 8px 16px; font-size: 0.9em; font-weight: 600;
+    color: var(--text-dim); background: none; border: none; border-radius: 7px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .how-tab:hover { color: var(--text); }
+  .how-tab.active { background: var(--accent); color: #fff; }
+  .how-panel { display: none; }
+  .how-panel.active { display: block; }
+  .ai-commands {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0;
+  }
+  .ai-commands code {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 14px; font-size: 0.85em; color: var(--accent);
+  }
+
+  /* ── Segments showcase ──────────────────────────────── */
+
+  .segments { padding: 40px 0; }
+  .segments h2 { text-align: center; font-size: 2em; margin-bottom: 16px; }
+  .segments .subtitle { text-align: center; color: var(--text-dim); margin-bottom: 20px; }
+  .seg-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 24px; }
+  .seg-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .seg-item .seg-type {
+    font-family: 'SF Mono', monospace;
+    font-size: 0.85em;
+    color: var(--accent);
+    width: 11ch;
+    flex-shrink: 0;
+  }
+  .palette-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .palette-tabs {
+    display: flex; flex-wrap: wrap; gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .palette-tab {
+    padding: 9px 16px;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    border: none; background: none;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .palette-tab:hover { color: var(--text); }
+  .palette-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .palette-tab .tab-count {
+    font-size: 0.85em; font-weight: 400; opacity: 0.6; margin-left: 4px;
+  }
+  .palette-chips {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 14px 16px;
+    min-height: 48px;
+  }
+  .palette-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.72em;
+    font-family: 'SF Mono', monospace;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    user-select: none;
+  }
+  .palette-chip:hover { border-color: var(--accent); }
+  .palette-chip.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .palette-chip .dot {
+    width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+  }
+  .palette-info {
+    display: none;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 0.8em;
+  }
+  .palette-info.visible { display: flex; gap: 12px; align-items: baseline; }
+  .palette-info-name {
+    font-family: 'SF Mono', monospace;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .palette-info-desc { color: var(--text-dim); }
+  .palette-preview {
+    padding: 8px 16px;
+    background: #000;
+    border-top: 1px solid var(--border);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    min-height: 32px;
+    color: var(--text-dim);
+  }
+
+  /* ── Footer ──────────────────────────────────────────── */
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 16px 0;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85em;
+  }
+  footer a { color: var(--text-dim); }
+
+  /* ── Responsive ──────────────────────────────────────── */
+
+  @media (max-width: 768px) {
+    .hero h1 { font-size: 2em; }
+    .hero .cta-row { flex-direction: column; align-items: center; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .seg-grid { grid-template-columns: 1fr; }
+  }
+
+  .j-key { color: #79c0ff; }
+  .j-str { color: #a5d6ff; }
+  .j-brace { color: var(--text-dim); }
+  .j-bool { color: var(--orange); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="logo">oh-my-line<span>(s)</span></div>
+    <div class="links">
+      <a href="builder.html">Config Builder</a>
+      <a href="docs/">Docs</a>
+      <a href="https://github.com/jamesprnich/oh-my-line" style="display:inline-flex;align-items:center"><svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="container">
+    <h1>oh-my-line<span>(s)</span></h1>
+    <p class="subtitle">A real-time statusline engine for Claude Code. Maybe useful elsewhere too.</p>
+    <div class="step-visual step-result" style="max-width:680px;margin:0 auto 28px;border-radius:10px;overflow:hidden;text-align:left">
+      <div class="sr-bar">
+        <div class="sr-dot" style="background:#ff5f57"></div>
+        <div class="sr-dot" style="background:#febc2e"></div>
+        <div class="sr-dot" style="background:#28c840"></div>
+        <span class="sr-title">Terminal</span>
+      </div>
+      <div class="sr-body">
+        <hr style="border:none;border-top:1px solid var(--border);margin:0 0 2px">
+        <span class="c-dim">&gt;</span> <span class="cursor"></span>
+        <hr style="border:none;border-top:1px solid var(--border);margin:2px 0 0">
+      </div>
+      <div id="hero-wasm" class="wasm-preview" style="display:none"></div>
+      <div id="hero-fallback">
+        <div class="sr-statusline">
+          <span class="c-green">&#9679;</span> <span class="c-white">5h</span> <span class="c-green">&#9679;</span><span class="c-dim">&#9675;&#9675;&#9675;&#9675;&#9675;</span> <span class="c-green">22%</span>
+          <span class="c-dim"> 5h ~11h 6m</span>
+          <span class="c-dim"> | </span>
+          <span class="c-white">7d</span> <span class="c-orange">&#9679;</span><span class="c-dim">&#9675;&#9675;&#9675;&#9675;</span> <span class="c-orange">35%</span>
+          <span class="c-dim"> | </span>
+          <span style="color:#00a0a0">effort: high</span>
+          <span class="c-dim"> | </span>
+          <span class="c-dim">CC</span> <span style="color:#888">v2.1.71</span>
+        </div>
+        <div class="sr-statusline">
+          <span class="c-cyan">myapp</span><span class="c-dim">@</span><span class="c-green">main</span>
+          <span class="c-dim"> | </span>
+          <span class="c-dim">(</span><span class="c-green">+48</span> <span class="c-red">-12</span><span class="c-dim">)</span>
+          <span class="c-dim"> | </span>
+          <span class="c-orange">139k/200k</span>
+          <span class="c-dim"> | </span>
+          <span class="c-dim">Context </span><span class="c-green">69% used</span>
+        </div>
+        <div class="sr-statusline">
+          <span class="c-yellow">46/min</span>
+          <span class="c-dim"> </span>
+          <span class="c-yellow">2k/hr</span>
+        </div>
+        <div class="sr-statusline" style="margin-left:10px;background:linear-gradient(90deg, #1a1a4a 50%, transparent 90%)">
+          &#128640; <span style="color:#ffffff;font-weight:bold">oh-my-line</span>
+          <span class="c-dim"> Built with Claude Code</span>
+          <span class="c-dim" style="margin-left:2em">— Hallucination? I call it jazz —</span>
+        </div>
+      </div>
+      <div style="height:12px;background:var(--bg)"></div>
+    </div>
+    <div class="cta-row" style="flex-wrap:wrap">
+      <a href="#how-to-install" class="btn btn-primary" onclick="switchHowTab('humans')">Install It Myself</a>
+      <a href="#how-to-install" class="btn" style="background:transparent;color:var(--accent);border:1px solid var(--accent)" onclick="switchHowTab('agents')" onmouseover="this.style.background='var(--accent)';this.style.color='#fff'" onmouseout="this.style.background='transparent';this.style.color='var(--accent)'">AI-Assisted Install</a>
+      <span style="width:1px;align-self:stretch;background:var(--border);margin:0 4px"></span>
+      <a href="builder.html" class="btn btn-secondary">Open Config Builder</a>
+      <a href="docs/" class="btn btn-secondary">Read the Docs</a>
+    </div>
+  </div>
+</section>
+
+<section class="steps" style="border-top:1px solid var(--border);margin-top:20px;padding-top:48px">
+  <div class="container">
+    <h2 id="how-to-install" style="scroll-margin-top:80px">How to install and use it</h2>
+    <div class="how-tabs">
+      <button class="how-tab active" onclick="switchHowTab('humans')">For Humans</button>
+      <button class="how-tab" onclick="switchHowTab('agents')">For AI Agents</button>
+    </div>
+
+    <div class="how-panel active" id="how-humans">
+    <p style="text-align:center;color:var(--text-dim);margin-bottom:24px;font-size:1.1em;">One command. Instant statusline.</p>
+
+    <!-- Step 1: Install -->
+    <div class="step">
+      <div class="step-label">1. Install</div>
+      <div class="step-visual step-result" style="position:relative">
+        <div class="sr-bar">
+          <div class="sr-dot" style="background:#ff5f57"></div>
+          <div class="sr-dot" style="background:#febc2e"></div>
+          <div class="sr-dot" style="background:#28c840"></div>
+          <span class="sr-title">Terminal</span>
+        </div>
+        <div style="display:flex;align-items:center;padding:12px 16px;gap:12px">
+          <div style="flex:1;font-family:'SF Mono','Cascadia Code','Fira Code',monospace;font-size:0.6em;color:var(--green);white-space:nowrap;overflow:hidden"><span style="color:var(--text-dim)">$</span> curl -fsSL https://raw.githubusercontent.com/jamesprnich/oh-my-line/main/install.sh | bash</div>
+          <button style="flex-shrink:0;background:var(--border);border:none;color:var(--text-dim);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.7em" onclick="navigator.clipboard.writeText('curl -fsSL https://raw.githubusercontent.com/jamesprnich/oh-my-line/main/install.sh | bash');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" onmouseover="this.style.background='var(--accent)';this.style.color='#fff'" onmouseout="this.style.background='var(--border)';this.style.color='var(--text-dim)'">Copy</button>
+        </div>
+      </div>
+      <details class="install-details">
+        <summary>What does the script do?</summary>
+        <div class="install-tabs">
+          <div class="install-tab active" onclick="switchInstallTab('auto')">Automated</div>
+          <div class="install-tab" onclick="switchInstallTab('manual')">Manually install</div>
+        </div>
+        <div class="install-panel active" id="install-auto">
+        <strong style="color:var(--text)">Files installed</strong>
+        <div class="detail-tree">
+          <span class="dt-dir">~/.oh-my-line/</span><br>
+          ├── oh-my-line <span class="dt-note">— compiled engine</span><br>
+          ├── config.json <span class="dt-note">— starter config (4-line preset)</span><br>
+          └── VERSION <span class="dt-note">— version file</span><br>
+          <br>
+          <span class="dt-dir">~/.claude/skills/oh-my-line/</span><br>
+          ├── SKILL.md <span class="dt-note">— Claude Code skill</span><br>
+          └── CONFIG-REFERENCE.md <span class="dt-note">— segment catalog</span>
+        </div>
+        <strong style="color:var(--text)">Settings updated</strong>
+        <div class="detail-json">
+          <span class="j-brace">// ~/.claude/settings.json</span><br>
+          <span class="j-brace">{</span><br>
+          &nbsp;&nbsp;<span class="j-key">"statusLine"</span><span class="j-brace">: {</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="j-key">"type"</span><span class="j-brace">:</span> <span class="j-str">"command"</span><span class="j-brace">,</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="j-key">"command"</span><span class="j-brace">:</span> <span class="j-str">"~/.oh-my-line/oh-my-line"</span><br>
+          &nbsp;&nbsp;<span class="j-brace">}</span><br>
+          <span class="j-brace">}</span>
+        </div>
+      </div>
+      <div class="install-panel" id="install-manual">
+        <div class="manual-step">
+          <span class="manual-step-num">1</span><strong style="color:var(--text)">Clone the repo</strong>
+          <div class="manual-cmd">git clone https://github.com/jamesprnich/oh-my-line.git ~/.oh-my-line</div>
+        </div>
+        <div class="manual-step">
+          <span class="manual-step-num">2</span><strong style="color:var(--text)">Build the binary</strong>
+          <div class="manual-cmd">cd engine && go build -o ~/.oh-my-line/oh-my-line ./cmd/oh-my-line/</div>
+        </div>
+        <div class="manual-step">
+          <span class="manual-step-num">3</span><strong style="color:var(--text)">Configure Claude Code</strong>
+          <div class="manual-cmd">
+            Add to <strong>~/.claude/settings.json</strong>:<br><br>
+            <span class="j-brace">{</span><br>
+            &nbsp;&nbsp;<span class="j-key">"statusLine"</span><span class="j-brace">: {</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span class="j-key">"type"</span><span class="j-brace">:</span> <span class="j-str">"command"</span><span class="j-brace">,</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span class="j-key">"command"</span><span class="j-brace">:</span> <span class="j-str">"~/.oh-my-line/oh-my-line"</span><br>
+            &nbsp;&nbsp;<span class="j-brace">}</span><br>
+            <span class="j-brace">}</span>
+          </div>
+        </div>
+        <div class="manual-step">
+          <span class="manual-step-num">4</span><strong style="color:var(--text)">Restart Claude Code</strong>
+          <div class="manual-cmd">The statusline appears on next launch.</div>
+        </div>
+      </div>
+      </details>
+    </div>
+
+    <!-- Step 2: Done — WASM-rendered preview -->
+    <div class="step">
+      <div class="step-label">2. That's it — restart Claude Code</div>
+      <div class="step-caption">The installer sets up a 4-line statusline out of the box — rate limits, ETAs, git info, burn rates, and product identity. No config needed.</div>
+      <div class="step-caption" style="margin-top:8px;font-size:0.85em">Install <a href="https://www.nerdfonts.com/" style="color:var(--accent)">Nerd Fonts</a> for the best experience — icons throughout your statusline. Enable <code style="font-size:0.9em">nerdFont</code> in your config.json or using the <a href="builder.html" style="color:var(--accent)">Config Builder</a> after installing.</div>
+      <div class="step-visual step-result">
+        <div class="sr-bar">
+          <div class="sr-dot" style="background:#ff5f57"></div>
+          <div class="sr-dot" style="background:#febc2e"></div>
+          <div class="sr-dot" style="background:#28c840"></div>
+          <span class="sr-title">Terminal</span>
+        </div>
+        <div class="sr-body">
+          <hr style="border:none;border-top:1px solid var(--border);margin:0 0 2px">
+          <span class="c-dim">&gt;</span> <span class="cursor"></span>
+          <hr style="border:none;border-top:1px solid var(--border);margin:2px 0 0">
+        </div>
+        <!-- WASM renders here; fallback is static HTML below -->
+        <div id="step2-wasm" class="wasm-preview" style="display:none"></div>
+        <div id="step2-fallback">
+          <div class="sr-statusline">
+            <span class="c-green">&#9679;</span> <span class="c-white">5h</span> <span class="c-green">&#9679;</span><span class="c-dim">&#9675;&#9675;&#9675;&#9675;&#9675;</span> <span class="c-green">22%</span>
+            <span class="c-dim"> 5h ~11h 6m</span>
+            <span class="c-dim"> | </span>
+            <span class="c-white">7d</span> <span class="c-orange">&#9679;</span><span class="c-dim">&#9675;&#9675;&#9675;&#9675;</span> <span class="c-orange">35%</span>
+            <span class="c-dim"> | </span>
+            <span style="color:#00a0a0">effort: high</span>
+            <span class="c-dim"> | </span>
+            <span class="c-dim">CC</span> <span style="color:#888">v2.1.71</span>
+          </div>
+          <div class="sr-statusline">
+            <span class="c-cyan">myapp</span><span class="c-dim">@</span><span class="c-green">main</span>
+            <span class="c-dim"> | </span>
+            <span class="c-dim">(</span><span class="c-green">+48</span> <span class="c-red">-12</span><span class="c-dim">)</span>
+            <span class="c-dim"> | </span>
+            <span class="c-orange">139k/200k</span>
+            <span class="c-dim"> | </span>
+            <span class="c-dim">Context </span><span class="c-green">69% used</span>
+          </div>
+          <div class="sr-statusline">
+            <span class="c-yellow">46/min</span>
+            <span class="c-dim"> </span>
+            <span class="c-yellow">2k/hr</span>
+          </div>
+          <div class="sr-statusline" style="margin-left:10px;background:linear-gradient(90deg, #1a1a4a 50%, transparent 90%)">
+            &#128640; <span style="color:#ffffff;font-weight:bold">oh-my-line</span>
+            <span class="c-dim"> Built with Claude Code</span>
+            <span class="c-dim" style="margin-left:2em">— Hallucination? I call it jazz —</span>
+          </div>
+        </div>
+        <div style="height:12px;background:var(--bg)"></div>
+      </div>
+    </div>
+
+    <!-- Step 3: Interactive demo — WASM-powered -->
+    <div class="step">
+      <div class="step-label">3. Customize <span class="c-dim" style="font-size:0.7em;font-weight:normal">optional</span></div>
+      <div class="step-caption" style="margin-top:0;margin-bottom:14px">Use the <a href="builder.html">Config Builder</a> to add and remove segments via drag-and-drop, customize styling, and preview live. Here's a partial demo:</div>
+
+      <div id="demo-wrap" class="demo-wrap">
+        <!-- Line tabs -->
+        <div class="demo-line-tabs" id="demo-line-tabs">
+          <button class="demo-line-tab active" onclick="demoSelectLine(0)">Line 1</button>
+          <button class="demo-line-tab" onclick="demoSelectLine(1)">Line 2</button>
+          <button class="demo-line-tab" onclick="demoSelectLine(2)">Line 3</button>
+          <button class="demo-line-tab" onclick="demoSelectLine(3)">Line 4</button>
+        </div>
+
+        <!-- Segment chips for current line -->
+        <div class="demo-segments" id="demo-segments"></div>
+
+        <!-- Live preview -->
+        <div class="demo-sep">live preview</div>
+        <div id="demo-preview" class="demo-preview">
+          <div class="wasm-loading"><span class="spinner"></span> Loading engine...</div>
+        </div>
+      </div>
+
+    </div>
+
+    </div><!-- /how-humans -->
+
+    <div class="how-panel" id="how-agents">
+      <p style="text-align:center;color:var(--text-dim);margin-bottom:24px;font-size:1.1em;">Point your AI at the skill file. That's it.</p>
+
+      <div class="step">
+        <div class="step-label">1. Give your agent the skill</div>
+        <div class="step-caption" style="margin-top:4px;margin-bottom:14px">
+          Point your agent at the <a href="https://github.com/jamesprnich/oh-my-line/blob/main/skills/oh-my-line/SKILL.md">SKILL.md</a> — it contains everything needed to install, configure, and verify.
+        </div>
+        <div class="step-visual step-result">
+          <div class="sr-bar">
+            <div class="sr-dot" style="background:#ff5f57"></div>
+            <div class="sr-dot" style="background:#febc2e"></div>
+            <div class="sr-dot" style="background:#28c840"></div>
+            <span class="sr-title">Terminal</span>
+          </div>
+          <div style="display:flex;align-items:center;padding:12px 16px;gap:12px">
+            <div style="flex:1;font-family:'SF Mono',monospace;font-size:0.6em;color:var(--text);white-space:pre-wrap;word-break:break-all"><span class="c-dim">&gt;</span> curl https://raw.githubusercontent.com/jamesprnich/oh-my-line/main/skills/oh-my-line/SKILL.md and follow it to set up oh-my-line</div>
+            <button style="flex-shrink:0;background:var(--border);border:none;color:var(--text-dim);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.7em" onclick="navigator.clipboard.writeText('curl https://raw.githubusercontent.com/jamesprnich/oh-my-line/main/skills/oh-my-line/SKILL.md and follow it to set up oh-my-line');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)" onmouseover="this.style.background='var(--accent)';this.style.color='#fff'" onmouseout="this.style.background='var(--border)';this.style.color='var(--text-dim)'">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-label">2. That's it — restart Claude Code</div>
+        <div class="step-caption">The agent runs the installer, creates your config, and verifies it works. Same result as the manual install.</div>
+        <div class="step-visual step-result">
+          <div class="sr-bar">
+            <div class="sr-dot" style="background:#ff5f57"></div>
+            <div class="sr-dot" style="background:#febc2e"></div>
+            <div class="sr-dot" style="background:#28c840"></div>
+            <span class="sr-title">Terminal</span>
+          </div>
+          <div class="sr-body">
+            <hr style="border:none;border-top:1px solid var(--border);margin:0 0 2px">
+            <span class="c-dim">&gt;</span> <span class="cursor"></span>
+            <hr style="border:none;border-top:1px solid var(--border);margin:2px 0 0">
+          </div>
+          <div id="step2-agent-wasm" class="wasm-preview" style="display:none"></div>
+          <div id="step2-agent-fallback">
+            <div class="sr-statusline">
+              <span class="c-green">&#9679;</span> <span class="c-white">5h</span> <span class="c-green">&#9679;</span><span class="c-dim">&#9675;&#9675;&#9675;&#9675;&#9675;</span> <span class="c-green">22%</span>
+              <span class="c-dim"> 5h ~11h 6m</span>
+              <span class="c-dim"> | </span>
+              <span class="c-white">7d</span> <span class="c-orange">&#9679;</span><span class="c-dim">&#9675;&#9675;&#9675;&#9675;</span> <span class="c-orange">35%</span>
+              <span class="c-dim"> | </span>
+              <span style="color:#00a0a0">effort: high</span>
+              <span class="c-dim"> | </span>
+              <span class="c-dim">CC</span> <span style="color:#888">v2.1.71</span>
+            </div>
+            <div class="sr-statusline">
+              <span class="c-cyan">myapp</span><span class="c-dim">@</span><span class="c-green">main</span>
+              <span class="c-dim"> | </span>
+              <span class="c-dim">(</span><span class="c-green">+48</span> <span class="c-red">-12</span><span class="c-dim">)</span>
+              <span class="c-dim"> | </span>
+              <span class="c-orange">139k/200k</span>
+              <span class="c-dim"> | </span>
+              <span class="c-dim">Context </span><span class="c-green">69% used</span>
+            </div>
+            <div class="sr-statusline">
+              <span class="c-yellow">46/min</span>
+              <span class="c-dim"> </span>
+              <span class="c-yellow">2k/hr</span>
+            </div>
+            <div class="sr-statusline" style="margin-left:10px;background:linear-gradient(90deg, #1a1a4a 50%, transparent 90%)">
+              &#128640; <span style="color:#ffffff;font-weight:bold">oh-my-line</span>
+              <span class="c-dim"> Built with Claude Code</span>
+              <span class="c-dim" style="margin-left:2em">— Hallucination? I call it jazz —</span>
+            </div>
+          </div>
+          <div style="height:12px;background:var(--bg)"></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-label">Available commands</div>
+        <div class="ai-commands">
+          <code>/oh-my-line install</code>
+          <code>/oh-my-line customize</code>
+          <code>/oh-my-line troubleshoot</code>
+        </div>
+        <div class="step-caption">Use the skill to install oh-my-line, add and configure segments, or troubleshoot issues.</div>
+      </div>
+    </div><!-- /how-agents -->
+
+  </div>
+</section>
+
+<section class="segments">
+  <div class="container">
+    <h2>65 Segments</h2>
+    <p class="subtitle">Click any segment to see it rendered live by the engine.<br><span style="font-size:0.8em;opacity:0.7">(Install <a href="https://www.nerdfonts.com/" style="color:inherit;text-decoration:underline">Nerd Fonts</a> for icons in the Config Builder and your statusline)</span></p>
+
+    <div class="palette-wrap">
+      <div class="palette-tabs" id="palette-tabs"></div>
+      <div class="palette-chips" id="palette-chips"></div>
+      <div class="palette-info" id="palette-info">
+        <span class="palette-info-name" id="palette-info-name"></span>
+        <span class="palette-info-desc" id="palette-info-desc"></span>
+      </div>
+      <div class="palette-preview" id="palette-preview">
+        <span style="opacity:0.4">Click a segment above to preview</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="features">
+  <div class="container">
+    <h2>Features</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">&#9889;</div>
+        <h3>Fast Compiled Engine</h3>
+        <p>Single Go binary — no jq, no Python, no Node. Self-gating segments skip work when not configured.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">&#128200;</div>
+        <h3>65 Segments</h3>
+        <p>Rate limits, ETAs, burn rates, cost tracking, GitHub PRs &amp; CI, Docker status, git stats, custom shell commands, and more.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">&#127912;</div>
+        <h3>Visual Config Builder</h3>
+        <p>Drag-and-drop config editor. Tabbed palette, live preview, 13 presets. Copy the JSON, paste into your config.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">&#128196;</div>
+        <h3>JSON Config</h3>
+        <p>One <code>oh-my-line.json</code> file controls everything. Global or per-project, your choice.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">&#127468;</div>
+        <h3>Nerd Font Icons</h3>
+        <p>Automatic icons across all segments when a Nerd Font is installed. Works without one too — just text.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">&#9776;</div>
+        <h3>Multi-Line Layouts</h3>
+        <p>Up to 20 lines with gradient, neon, fade, and solid backgrounds. Group segments however you like.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p><a href="https://github.com/jamesprnich/oh-my-line/blob/main/LICENSE">MIT License</a> &middot; Inspired by <a href="https://github.com/daniel3303/ClaudeCodeStatusLine">ClaudeCodeStatusLine</a> by Daniel Oliveira</p>
+  </div>
+</footer>
+
+<!-- Go WASM runtime -->
+<script src="engine/wasm_exec.js"></script>
+
+<script>
+// ── Tab switching ────────────────────────────────────────────────────────────
+function switchHowTab(tab) {
+  document.querySelectorAll('.how-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.how-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.how-tab[onclick*="' + tab + '"]').classList.add('active');
+  document.getElementById('how-' + tab).classList.add('active');
+  // Colour the active tab — red for agents, accent for humans
+  document.querySelectorAll('.how-tab').forEach(function(t) {
+    if (t.classList.contains('active')) {
+      t.style.background = tab === 'agents' ? '#e11d48' : 'var(--accent)';
+    } else {
+      t.style.background = 'none';
+    }
+  });
+}
+
+function switchInstallTab(tab) {
+  document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.install-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.install-tab[onclick*="' + tab + '"]').classList.add('active');
+  document.getElementById('install-' + tab).classList.add('active');
+}
+
+// ── ANSI to HTML converter (from builder.html) ──────────────────────────────
+function ansiToHtml(ansi) {
+  var html = '';
+  var i = 0;
+  var currentStyles = [];
+  while (i < ansi.length) {
+    if (ansi[i] === '\x1b' && ansi[i+1] === ']') {
+      // Skip OSC markers (segment click markers from builder)
+      var j = i + 2;
+      while (j < ansi.length && ansi[j] !== '\x07') j++;
+      i = j + 1;
+    } else if (ansi[i] === '\x1b' && ansi[i+1] === '[') {
+      var j = i + 2;
+      while (j < ansi.length && ansi[j] !== 'm') j++;
+      var codes = ansi.slice(i+2, j).split(';').map(Number);
+      i = j + 1;
+      var ci = 0;
+      while (ci < codes.length) {
+        var code = codes[ci];
+        if (code === 0) {
+          for (var s = currentStyles.length - 1; s >= 0; s--) html += '</span>';
+          currentStyles = [];
+        } else if (code === 1) {
+          html += '<span style="font-weight:bold;">';
+          currentStyles.push('bold');
+        } else if (code === 2) {
+          html += '<span style="opacity:0.5;">';
+          currentStyles.push('dim');
+        } else if (code === 22) {
+          var idx = currentStyles.lastIndexOf('dim');
+          if (idx >= 0) { html += '</span>'; currentStyles.splice(idx, 1); }
+        } else if (code === 38 && codes[ci+1] === 2) {
+          var r = codes[ci+2] || 0, g = codes[ci+3] || 0, b = codes[ci+4] || 0;
+          html += '<span style="color:rgb(' + r + ',' + g + ',' + b + ');">';
+          currentStyles.push('fg');
+          ci += 4;
+        } else if (code === 48 && codes[ci+1] === 2) {
+          var r = codes[ci+2] || 0, g = codes[ci+3] || 0, b = codes[ci+4] || 0;
+          html += '<span style="background:rgb(' + r + ',' + g + ',' + b + ');">';
+          currentStyles.push('bg');
+          ci += 4;
+        }
+        ci++;
+      }
+    } else if (ansi[i] === '\n') {
+      for (var s = currentStyles.length - 1; s >= 0; s--) html += '</span>';
+      currentStyles = [];
+      html += '<br>';
+      i++;
+    } else {
+      var ch = ansi[i];
+      if (ch === '<') html += '&lt;';
+      else if (ch === '>') html += '&gt;';
+      else if (ch === '&') html += '&amp;';
+      else if (ch === ' ') html += '\u00a0';
+      else html += ch;
+      i++;
+    }
+  }
+  for (var s = currentStyles.length - 1; s >= 0; s--) html += '</span>';
+  return html;
+}
+
+// ── Mock data (matches builder.html) ────────────────────────────────────────
+var ESC = '\x1b[';
+var RST = ESC + '0m';
+var BOLD = ESC + '1m';
+var DIM = ESC + '2m';
+
+function hexFG(hex) {
+  var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return ESC + '38;2;' + r + ';' + g + ';' + b + 'm';
+}
+
+function mockBar(pct, color, label, resetStr) {
+  var w = 6, filled = Math.round(pct / 100 * w);
+  var fg = hexFG(color);
+  var white = hexFG('#dcdcdc');
+  var cyan = hexFG('#2e9599');
+  var bar = fg;
+  for (var i = 0; i < w; i++) bar += (i < filled ? '\u25cf' : '\u25cb');
+  var out = white + label + RST + ' ' + bar + RST + ' ' + cyan + Math.round(pct) + '%' + RST;
+  if (resetStr) out += ' ' + DIM + '@' + resetStr + RST;
+  return out;
+}
+
+var mockInputJSON = JSON.stringify({
+  model: { display_name: 'Claude Opus 4.6', id: 'claude-opus-4-6' },
+  context_window: {
+    context_window_size: 200000,
+    current_usage: { input_tokens: 65000, cache_creation_input_tokens: 8000, cache_read_input_tokens: 4000, output_tokens: 1500 },
+    total_input_tokens: 120000, total_output_tokens: 25000
+  },
+  cwd: '/home/user/myproject',
+  version: '1.0.5',
+  cost: { total_cost_usd: 1.75, total_duration_ms: 240000, total_api_duration_ms: 144000, total_lines_added: 35, total_lines_removed: 12 },
+  exceeds_200k_tokens: false,
+  vim: { mode: 'NORMAL' },
+  agent: { name: '' },
+  worktree: { name: '', branch: '' },
+  runtime: {
+    burn_rate_min: 2100, burn_rate_hr: 126000, burn_elapsed: 120, burn_has_data: true,
+    rate_session: mockBar(42, '#00a000', '5h', '11:00am'),
+    rate_weekly: mockBar(28, '#00a000', '7d', ''),
+    rate_extra: '',
+    rate_opus: mockBar(35, '#7c3aed', 'opus', ''),
+    session_pct: 42, weekly_pct: 28, rate_has_data: true,
+    burn_spark: hexFG('#e6c800') + '\u2581\u2583\u2585\u2587\u2588\u2586\u2584\u2582' + RST,
+    ctx_spark: hexFG('#ffb055') + '\u2582\u2583\u2585\u2586\u2587\u2587\u2588\u2587' + RST,
+    rate_spark: hexFG('#00a000') + '\u2583\u2585\u2586\u2587\u2587\u2588\u2586\u2585' + RST,
+    ctx_target: hexFG('#00a000') + '\u2582\u2583\u2585' + RST + hexFG('#e6c800') + '\u2586\u2587' + RST + hexFG('#ff5555') + '\u2588' + RST,
+    rate_target: hexFG('#00a000') + '\u2583\u2585\u2586' + RST + hexFG('#e6c800') + '\u2587\u2587' + RST + hexFG('#ff5555') + '\u2588' + RST,
+    eta_session: DIM + '~2h 15m' + RST,
+    eta_session_min: DIM + '~135m' + RST,
+    eta_session_hr: DIM + '~2.3h' + RST,
+    eta_weekly: DIM + '~4d 8h' + RST,
+    eta_weekly_min: DIM + '~6,240m' + RST,
+    eta_weekly_hr: DIM + '~104h' + RST,
+    cost_ctx: hexFG('#e6c800') + '$1.75' + RST,
+    cost_min: hexFG('#e6c800') + '$0.44/min' + RST,
+    cost_hr: hexFG('#e6c800') + '$26.25/hr' + RST,
+    cost_7d: hexFG('#e6c800') + '$18.50' + RST,
+    cost_spark: hexFG('#e6c800') + '\u2582\u2583\u2585\u2586\u2587\u2588\u2585\u2583' + RST,
+    gh_pr: hexFG('#2e9599') + 'PR #42' + RST + ' ' + hexFG('#00a000') + '\u2713' + RST,
+    gh_checks: hexFG('#00a000') + '\u2713 8/8' + RST,
+    gh_reviews: hexFG('#00a000') + '2 approved' + RST,
+    gh_actions: hexFG('#00a000') + '\u2713 passing' + RST,
+    gh_notifs: hexFG('#e6c800') + '3 \ud83d\udd14' + RST,
+    gh_issues: hexFG('#ff5555') + '5 open' + RST,
+    gh_pr_count: hexFG('#2e9599') + '3 PRs' + RST,
+    gh_pr_comments: DIM + '12 comments' + RST,
+    gh_stars: hexFG('#e6c800') + '\u2605 142' + RST,
+    docker: hexFG('#2e9599') + '3/3 \u2713' + RST,
+    docker_db: hexFG('#2e9599') + 'pg \u2713' + RST
+  }
+});
+
+// ── Builder preset config ───────────────────────────────────────────────────
+var DEFAULT_MESSAGES = [
+  "I'm not hallucinating, you're wrong",
+  "Context window: the new RAM",
+  "Tokens in, vibes out",
+  "Your prompt could be clearer",
+  "Hallucination? I call it jazz",
+  "Pair programming, minus the small talk",
+  "Bold prompt, let's see what happens"
+];
+
+var BUILDER_PRESET = {
+  nerdFont: false,
+  'oh-my-lines': [
+    { separatorStyle: { dim: true }, segments: [
+      { type: 'rate-session', showReset: false },
+      { type: 'eta-session' },
+      { type: 'sep' },
+      { type: 'rate-weekly' },
+      { type: 'sep' },
+      { type: 'effort' },
+      { type: 'sep' },
+      { type: 'text', content: 'CC' },
+      { type: 'cc-version' }
+    ]},
+    { separatorStyle: { dim: true }, segments: [
+      { type: 'dir-branch' },
+      { type: 'sep' },
+      { type: 'diff-stats' },
+      { type: 'sep' },
+      { type: 'tokens' },
+      { type: 'sep' },
+      { type: 'text', content: 'Context' },
+      { type: 'pct-used' }
+    ]},
+    { segments: [
+      { type: 'burn-min' },
+      { type: 'burn-hr' },
+      { type: 'compact-warn' },
+      { type: 'docker' }
+    ]},
+    { backgroundStyle: 'gradient', background: '#1a1a4a', segments: [
+      { type: 'icon', content: '\uD83D\uDE80' },
+      { type: 'label', content: 'oh-my-line' },
+      { type: 'tagline', content: 'Built with Claude Code' },
+      { type: 'message', messages: DEFAULT_MESSAGES, interval: 5 }
+    ]}
+  ]
+};
+
+// ── Demo state ──────────────────────────────────────────────────────────────
+// Deep copy the preset so we can toggle segments on/off
+var demoConfig = JSON.parse(JSON.stringify(BUILDER_PRESET));
+var demoActiveLine = 0;
+
+// Segment colour map for the chip dots
+var SEG_COLORS = {
+  'rate-session': '#00a000', 'eta-session': '#888', 'sep': '#666',
+  'rate-weekly': '#00a000', 'effort': '#00a0a0', 'text': '#dcdcdc',
+  'cc-version': '#888', 'dir-branch': '#39d2c0', 'diff-stats': '#3fb950',
+  'tokens': '#ffb055', 'pct-used': '#3fb950', 'burn-min': '#e6c800',
+  'burn-hr': '#e6c800', 'compact-warn': '#ff5555', 'docker': '#2e9599',
+  'icon': '#fff', 'label': '#fff', 'tagline': '#888',
+  'message': '#888', 'model': '#7c3aed', 'branch': '#3fb950',
+  'dir': '#39d2c0', 'burn-spark': '#e6c800', 'rate-extra': '#e6c800',
+  'rate-opus': '#7c3aed', 'cost': '#e6c800', 'cost-hr': '#e6c800',
+  'gh-pr': '#2e9599', 'gh-checks': '#00a000'
+};
+
+// Track which segments are toggled off per line: { lineIdx: Set of segIdx }
+var demoOff = { 0: new Set(), 1: new Set(), 2: new Set(), 3: new Set() };
+
+function demoSelectLine(n) {
+  demoActiveLine = n;
+  document.querySelectorAll('.demo-line-tab').forEach(function(t, i) {
+    t.classList.toggle('active', i === n);
+  });
+  demoRenderChips();
+}
+
+function demoRenderChips() {
+  var container = document.getElementById('demo-segments');
+  var line = BUILDER_PRESET['oh-my-lines'][demoActiveLine];
+  if (!line) return;
+  var html = '';
+  line.segments.forEach(function(seg, i) {
+    var isOff = demoOff[demoActiveLine].has(i);
+    var color = SEG_COLORS[seg.type] || '#888';
+    html += '<span class="demo-chip' + (isOff ? ' off' : '') + '" onclick="demoToggle(' + demoActiveLine + ',' + i + ')">';
+    html += '<span class="dot" style="background:' + color + '"></span>';
+    html += seg.type;
+    html += '</span>';
+  });
+  container.innerHTML = html;
+}
+
+function demoToggle(lineIdx, segIdx) {
+  if (demoOff[lineIdx].has(segIdx)) {
+    demoOff[lineIdx].delete(segIdx);
+  } else {
+    demoOff[lineIdx].add(segIdx);
+  }
+  demoRenderChips();
+  demoRenderPreview();
+}
+
+function demoBuildConfig() {
+  // Build config from preset, excluding toggled-off segments
+  var lines = [];
+  BUILDER_PRESET['oh-my-lines'].forEach(function(line, li) {
+    var segs = [];
+    line.segments.forEach(function(seg, si) {
+      if (!demoOff[li].has(si)) {
+        segs.push(JSON.parse(JSON.stringify(seg)));
+      }
+    });
+    if (segs.length > 0) {
+      var lineCopy = JSON.parse(JSON.stringify(line));
+      lineCopy.segments = segs;
+      lines.push(lineCopy);
+    }
+  });
+  return {
+    nerdFont: BUILDER_PRESET.nerdFont,
+    'oh-my-lines': lines
+  };
+}
+
+function getCharWidth(el) {
+  if (!el) return 100;
+  var span = document.createElement('span');
+  span.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-family:inherit;font-size:inherit;';
+  span.textContent = 'M';
+  el.appendChild(span);
+  var charW = span.getBoundingClientRect().width || 7.2;
+  el.removeChild(span);
+  var containerW = el.clientWidth - 32;
+  return Math.floor(containerW / charW) || 100;
+}
+
+function demoRenderPreview() {
+  if (!wasmReady) return;
+  var el = document.getElementById('demo-preview');
+  var cfg = demoBuildConfig();
+  if (cfg['oh-my-lines'].length === 0) {
+    el.innerHTML = '<span style="opacity:0.5">No segments enabled</span>';
+    return;
+  }
+  try {
+    var ansi = omlRender(JSON.stringify(cfg), mockInputJSON, getCharWidth(el));
+    if (ansi) {
+      el.innerHTML = ansiToHtml(ansi);
+    }
+  } catch(e) {
+    el.innerHTML = '<span style="color:var(--red)">Render error</span>';
+  }
+}
+
+// ── Step 2: Render with WASM ────────────────────────────────────────────────
+function renderStep2() {
+  if (!wasmReady) return;
+  // Render both human and agent step 2 previews
+  [['hero-wasm', 'hero-fallback'], ['step2-wasm', 'step2-fallback'], ['step2-agent-wasm', 'step2-agent-fallback']].forEach(function(ids) {
+    var el = document.getElementById(ids[0]);
+    var fallback = document.getElementById(ids[1]);
+    if (!el || !fallback) return;
+    try {
+      var ansi = omlRender(JSON.stringify(BUILDER_PRESET), mockInputJSON, getCharWidth(el));
+      if (ansi) {
+        el.innerHTML = ansiToHtml(ansi);
+        el.style.display = '';
+        fallback.style.display = 'none';
+      }
+    } catch(e) {}
+  });
+}
+
+// ── Load WASM ───────────────────────────────────────────────────────────────
+var wasmReady = false;
+
+(async function loadWasm() {
+  try {
+    if (!WebAssembly) return;
+    var go = new Go();
+    var wasmPath = 'engine/renderer.wasm';
+    var result = await WebAssembly.instantiateStreaming(fetch(wasmPath), go.importObject);
+    go.run(result.instance);
+    wasmReady = true;
+    console.log('WASM engine loaded');
+
+    // Render step 2 preview
+    renderStep2();
+
+    // Render palette preview for selected segment
+    paletteRenderPreview();
+
+    // Render step 3 demo
+    demoRenderChips();
+    demoRenderPreview();
+  } catch (e) {
+    console.log('WASM not available, using fallback:', e.message);
+    // Show fallback message in demo
+    var el = document.getElementById('demo-preview');
+    if (el) {
+      el.innerHTML = '<span style="opacity:0.5">Interactive demo requires WASM — <a href="builder.html" style="color:var(--accent)">open the Config Builder</a> instead</span>';
+    }
+    // Render chips even without WASM
+    demoRenderChips();
+  }
+})();
+// ── Segment Palette Browser ─────────────────────────────────────────────────
+var PALETTE = {
+  'Claude Code': [
+    { type: 'model', desc: 'Current model name', color: '#7c3aed' },
+    { type: 'model-id', desc: 'Model identifier', color: '#7c3aed' },
+    { type: 'cc-version', desc: 'Claude Code version', color: '#888' },
+    { type: 'effort', desc: 'Thinking effort level', color: '#00a0a0' },
+    { type: 'vim-mode', desc: 'Vim mode indicator', color: '#e6c800' },
+    { type: 'agent', desc: 'Active agent name', color: '#7c3aed' },
+    { type: '200k-warn', desc: 'Large context warning', color: '#ff5555' },
+    { type: 'tokens', desc: 'Context usage (65k/200k)', color: '#ffb055' },
+    { type: 'pct-used', desc: 'Percentage consumed', color: '#3fb950' },
+    { type: 'pct-remain', desc: 'Percentage remaining', color: '#3fb950' },
+    { type: 'compact-warn', desc: 'Context compaction warning', color: '#ff5555' },
+    { type: 'total-tokens', desc: 'Total tokens used', color: '#ffb055' },
+    { type: 'cache-hit', desc: 'Cache hit ratio', color: '#39d2c0' },
+    { type: 'ctx-spark', desc: 'Context usage sparkline', color: '#ffb055' },
+    { type: 'ctx-target', desc: 'Context target indicator', color: '#00a000' },
+    { type: 'session-cost', desc: 'Session spend', color: '#e6c800' },
+    { type: 'cost', desc: 'Session API cost', color: '#e6c800' },
+    { type: 'cost-min', desc: 'Cost per minute', color: '#e6c800' },
+    { type: 'cost-hr', desc: 'Hourly cost rate', color: '#e6c800' },
+    { type: 'cost-7d', desc: '7-day total cost', color: '#e6c800' },
+    { type: 'cost-spark', desc: 'Cost sparkline', color: '#e6c800' },
+    { type: 'burn-min', desc: 'Tokens per minute', color: '#e6c800' },
+    { type: 'burn-hr', desc: 'Tokens per hour', color: '#e6c800' },
+    { type: 'burn-spark', desc: 'Burn rate sparkline', color: '#e6c800' },
+    { type: 'session-duration', desc: 'Session elapsed time', color: '#888' },
+    { type: 'api-wait', desc: 'API response wait time', color: '#888' },
+    { type: 'rate-session', desc: 'Session limit with progress bar', color: '#00a000' },
+    { type: 'rate-weekly', desc: 'Weekly limit with progress bar', color: '#00a000' },
+    { type: 'rate-extra', desc: 'Extra usage credits', color: '#e6c800' },
+    { type: 'rate-opus', desc: 'Opus tier usage', color: '#7c3aed' },
+    { type: 'rate-spark', desc: 'Rate limit sparkline', color: '#00a000' },
+    { type: 'rate-target', desc: 'Rate limit target indicator', color: '#00a000' },
+    { type: 'eta-session', desc: 'Time until session limit', color: '#888' },
+    { type: 'eta-session-min', desc: 'Session ETA in minutes', color: '#888' },
+    { type: 'eta-session-hr', desc: 'Session ETA in hours', color: '#888' },
+    { type: 'eta-weekly', desc: 'Time until weekly limit', color: '#888' },
+    { type: 'eta-weekly-min', desc: 'Weekly ETA in minutes', color: '#888' },
+    { type: 'eta-weekly-hr', desc: 'Weekly ETA in hours', color: '#888' }
+  ],
+  'Git': [
+    { type: 'branch', desc: 'Current branch', color: '#3fb950' },
+    { type: 'dir-branch', desc: 'Directory@branch', color: '#39d2c0' },
+    { type: 'diff-stats', desc: 'Lines added/removed', color: '#3fb950' },
+    { type: 'worktree', desc: 'Git worktree name', color: '#39d2c0' },
+    { type: 'lines-changed', desc: 'Total lines changed', color: '#3fb950' }
+  ],
+  'GitHub': [
+    { type: 'gh-pr', desc: 'PR status', color: '#2e9599' },
+    { type: 'gh-checks', desc: 'CI check status', color: '#00a000' },
+    { type: 'gh-reviews', desc: 'Review approvals', color: '#00a000' },
+    { type: 'gh-pr-comments', desc: 'PR comment count', color: '#888' },
+    { type: 'gh-actions', desc: 'Actions workflow status', color: '#00a000' },
+    { type: 'gh-notifs', desc: 'Notification count', color: '#e6c800' },
+    { type: 'gh-issues', desc: 'Open issue count', color: '#ff5555' },
+    { type: 'gh-pr-count', desc: 'Open PR count', color: '#2e9599' },
+    { type: 'gh-stars', desc: 'Repository stars', color: '#e6c800' }
+  ],
+  'Docker': [
+    { type: 'docker', desc: 'Container status', color: '#2e9599' },
+    { type: 'docker-db', desc: 'Database container health', color: '#2e9599' }
+  ],
+  'Product': [
+    { type: 'icon', desc: 'Product emoji or icon', color: '#fff' },
+    { type: 'label', desc: 'Product name', color: '#fff' },
+    { type: 'tagline', desc: 'Product subtitle', color: '#888' }
+  ],
+  'Workspace': [
+    { type: 'dir', desc: 'Current directory', color: '#39d2c0' },
+    { type: 'text', desc: 'Static text', color: '#dcdcdc' },
+    { type: 'sep', desc: 'Separator', color: '#666' },
+    { type: 'custom-icon', desc: 'Custom icon character', color: '#dcdcdc' },
+    { type: 'command', desc: 'Shell command output', color: '#dcdcdc' },
+    { type: 'env', desc: 'Environment variable', color: '#39d2c0' },
+    { type: 'version', desc: 'Package version', color: '#888' },
+    { type: 'message', desc: 'Rotating messages', color: '#888' }
+  ]
+};
+
+var paletteActiveTab = 'Claude Code';
+var paletteActiveSeg = null;
+
+// Segment-specific config overrides for preview
+var SEG_PREVIEW_CFG = {
+  'icon': { content: '\uD83D\uDE80' },
+  'label': { content: 'my-app' },
+  'tagline': { content: 'Built with Claude Code' },
+  'text': { content: 'hello' },
+  'custom-icon': { content: '\u2764' },
+  'command': { content: 'echo ok', cache: 60 },
+  'message': { messages: ['Hallucination? I call it jazz', 'Tokens in, vibes out'], interval: 5 },
+  'env': { content: 'NODE_ENV' },
+  'sep': {}
+};
+
+function paletteInit() {
+  var tabs = document.getElementById('palette-tabs');
+  var html = '';
+  var categories = Object.keys(PALETTE);
+  categories.forEach(function(cat) {
+    var cls = cat === paletteActiveTab ? ' active' : '';
+    html += '<button class="palette-tab' + cls + '" onclick="paletteSelectTab(\'' + cat + '\')">';
+    html += cat + '<span class="tab-count">' + PALETTE[cat].length + '</span></button>';
+  });
+  tabs.innerHTML = html;
+  paletteRenderChips();
+}
+
+function paletteSelectTab(cat) {
+  paletteActiveTab = cat;
+  paletteActiveSeg = null;
+  document.querySelectorAll('.palette-tab').forEach(function(t) {
+    t.classList.toggle('active', t.textContent.indexOf(cat) === 0);
+  });
+  paletteRenderChips();
+  document.getElementById('palette-info').classList.remove('visible');
+  document.getElementById('palette-preview').innerHTML = '<span style="opacity:0.4">Click a segment above to preview</span>';
+}
+
+function paletteRenderChips() {
+  var container = document.getElementById('palette-chips');
+  var segs = PALETTE[paletteActiveTab];
+  var html = '';
+  segs.forEach(function(seg) {
+    var cls = paletteActiveSeg === seg.type ? ' active' : '';
+    html += '<span class="palette-chip' + cls + '" onclick="paletteSelect(\'' + seg.type + '\')">';
+    html += '<span class="dot" style="background:' + seg.color + '"></span>';
+    html += seg.type + '</span>';
+  });
+  container.innerHTML = html;
+}
+
+function paletteSelect(type) {
+  paletteActiveSeg = type;
+  paletteRenderChips();
+
+  // Find segment info
+  var seg = null;
+  PALETTE[paletteActiveTab].forEach(function(s) { if (s.type === type) seg = s; });
+  if (!seg) return;
+
+  // Show info bar
+  document.getElementById('palette-info-name').textContent = seg.type;
+  document.getElementById('palette-info-desc').textContent = seg.desc;
+  document.getElementById('palette-info').classList.add('visible');
+
+  // Render preview via WASM
+  paletteRenderPreview();
+}
+
+function paletteRenderPreview() {
+  if (!wasmReady || !paletteActiveSeg) return;
+  var el = document.getElementById('palette-preview');
+  var segCfg = { type: paletteActiveSeg };
+  var overrides = SEG_PREVIEW_CFG[paletteActiveSeg];
+  if (overrides) {
+    Object.keys(overrides).forEach(function(k) { segCfg[k] = overrides[k]; });
+  }
+  var cfg = {
+    'oh-my-lines': [{ segments: [segCfg] }]
+  };
+  try {
+    var ansi = omlRender(JSON.stringify(cfg), mockInputJSON, getCharWidth(el));
+    if (ansi && ansi.trim()) {
+      el.innerHTML = ansiToHtml(ansi);
+    } else {
+      el.innerHTML = '<span style="opacity:0.4">(empty — this segment needs runtime data)</span>';
+    }
+  } catch(e) {
+    el.innerHTML = '<span style="opacity:0.4">Preview unavailable</span>';
+  }
+}
+
+// Init palette on load
+paletteInit();
+</script>
+</body>
+</html>

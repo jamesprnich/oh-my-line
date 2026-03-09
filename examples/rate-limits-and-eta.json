@@ -1,0 +1,17 @@
+{
+  "oh-my-lines": [
+    {
+      "separator": "|",
+      "separatorStyle": { "dim": true },
+      "segments": [
+        { "type": "model" },
+        { "type": "tokens" },
+        { "type": "rate-session" },
+        { "type": "rate-weekly" },
+        { "type": "rate-extra" },
+        { "type": "eta-session-min" },
+        { "type": "eta-weekly" }
+      ]
+    }
+  ]
+}

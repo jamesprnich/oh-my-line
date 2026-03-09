@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+
+# Claude Code local config (installed instance, not source)
+.claude/
+
+# Dev / test artifacts
+*.log
+*.tmp
+test-results.xml
+
+# oh-my-line runtime cache (never in repo)
+cost/
+
+# Go build artifacts (binaries go in GitHub Releases)
+engine/dist/
+engine/oh-my-line
+engine/renderer.wasm
+*.wasm
+*.wasm.bak

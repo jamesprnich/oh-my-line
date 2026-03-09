@@ -1,0 +1,49 @@
+site_name: oh-my-line
+site_url: https://jamesprnich.github.io/oh-my-line/docs/
+site_description: Real-time statusline engine for Claude Code
+repo_url: https://github.com/jamesprnich/oh-my-line
+repo_name: oh-my-line
+
+theme:
+  name: material
+  custom_dir: overrides
+  palette:
+    scheme: slate
+    primary: blue
+    accent: blue
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Getting Started: index.md
+  - Segment Types: segments.md
+  - Config Reference: config.md
+  - Custom Segments: custom-segments.md
+  - Builder: builder.md
+  - Usage Proxy: usage-proxy.md
+  - Troubleshooting: troubleshooting.md

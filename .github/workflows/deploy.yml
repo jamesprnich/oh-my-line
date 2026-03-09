@@ -1,0 +1,71 @@
+name: Deploy Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'builder.html'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: false
+
+      - name: Build WASM
+        working-directory: engine
+        run: GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o renderer.wasm ./cmd/wasm/
+
+      - name: Install MkDocs
+        run: pip install mkdocs-material==9.6.12
+
+      - name: Build MkDocs
+        run: cd docs && mkdocs build --strict --site-dir ../build/docs
+
+      - name: Assemble site
+        run: |
+          mkdir -p build/engine
+          cp site/index.html build/index.html
+          cp builder.html build/builder.html
+          cp engine/renderer.wasm build/engine/renderer.wasm
+          cp engine/wasm_exec.js build/engine/wasm_exec.js
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

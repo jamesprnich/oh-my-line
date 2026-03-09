@@ -1,0 +1,27 @@
+{
+  "oh-my-lines": [
+    {
+      "separator": "|",
+      "separatorStyle": { "dim": true },
+      "segments": [
+        { "type": "model" },
+        { "type": "dir-branch" },
+        { "type": "tokens" },
+        { "type": "pct-used" },
+        { "type": "burn-min" },
+        { "type": "rate-session" },
+        { "type": "rate-weekly" }
+      ]
+    },
+    {
+      "backgroundStyle": "gradient",
+      "background": "#1a1a2e",
+      "segments": [
+        { "type": "icon", "content": "🦙" },
+        { "type": "label", "content": "Ollama" },
+        { "type": "tagline", "content": "Run LLMs locally" },
+        { "type": "message", "messages": ["Pull. Run. Done.", "No cloud required.", "Models on tap."], "interval": 300 }
+      ]
+    }
+  ]
+}

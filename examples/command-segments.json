@@ -1,0 +1,15 @@
+{
+  "oh-my-lines": [
+    {
+      "separator": "|",
+      "separatorStyle": { "dim": true },
+      "segments": [
+        { "type": "model" },
+        { "type": "dir-branch" },
+        { "type": "tokens" },
+        { "type": "command", "content": "date +%H:%M", "cache": 10 },
+        { "type": "command", "content": "curl -s 'wttr.in/?format=%c%t'", "cache": 300 }
+      ]
+    }
+  ]
+}

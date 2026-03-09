@@ -1,0 +1,38 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: false
+
+      - name: Run Go tests
+        working-directory: engine
+        run: go test ./... -count=1
+
+      - name: Go vet
+        working-directory: engine
+        run: go vet ./...
+
+      - name: Build CLI binary
+        working-directory: engine
+        run: go build -ldflags="-s -w" -o oh-my-line ./cmd/oh-my-line/
+
+      - name: Build WASM
+        working-directory: engine
+        run: GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o renderer.wasm ./cmd/wasm/

@@ -1,0 +1,3385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script defer src="https://cloud.umami.is/script.js" data-website-id="3959744d-ae37-4c0c-b903-491de3801d1c"></script>
+<title>oh-my-line builder</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3;
+    --muted: #8b949e; --accent: #58a6ff; --accent-dim: #1f6feb;
+    --green: #3fb950; --orange: #d29922; --red: #f85149; --cyan: #39d2c0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Layout */
+  .app { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  /* Navbar */
+  .navbar {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13, 17, 23, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+  .navbar .nav-inner {
+    max-width: 1200px; margin: 0 auto; padding: 0 24px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .navbar .logo { font-weight: 700; font-size: 1.1em; line-height: 1.2; }
+  .navbar .logo span { color: #7c3aed; }
+  .navbar .logo-sub { display: block; font-size: 0.7em; font-weight: 400; color: var(--accent); letter-spacing: 0.02em; }
+  .navbar .nav-links { display: flex; gap: 24px; align-items: center; font-size: 0.95em; }
+  .navbar .nav-links a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .navbar .nav-links a:hover { color: var(--text); }
+
+  /* Cards */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); font-weight: 600; margin-bottom: 10px;
+  }
+
+  /* Preview */
+  .preview-wrap { background: #000 !important; padding: 16px 20px; min-height: 60px; }
+  .preview { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace; font-size: 12px; line-height: 1.4; white-space: nowrap; overflow: hidden; }
+  .preview.nf-active, .line-preview.nf-active { font-family: 'Hack Nerd Font Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace; font-size: 14px; }
+  .preview .line { display: block; }
+
+  .preview-arrow {
+    text-align: center; font-size: 11px; color: var(--muted); margin: -8px 0 4px;
+    opacity: 0.6; letter-spacing: 0.5px;
+  }
+
+  /* Lines config (under preview) */
+  .lines-wrap {
+    z-index: 90;
+    transition: box-shadow 0.2s;
+  }
+  .lines-wrap.stuck {
+    top: 49px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+
+  /* Line tabs */
+  .line-tabs-wrap {
+    display: flex; align-items: end; margin-top: 12px; border-bottom: 1px solid var(--border); gap: 8px;
+  }
+  .line-tabs {
+    display: flex; gap: 0; align-items: center;
+    overflow-x: auto; overflow-y: hidden; flex: 1; min-width: 0;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .line-tabs::-webkit-scrollbar { height: 3px; }
+  .line-tabs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .line-tabs-actions {
+    display: flex; gap: 6px; padding-bottom: 4px;
+    flex-shrink: 0; align-items: center;
+  }
+  .line-tabs-actions .btn { font-size: 11px; padding: 4px 10px; height: 26px; line-height: 1; }
+  .actions-dropdown {
+    display: none; position: absolute; right: 0; top: 100%; margin-top: 4px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 200; min-width: 120px;
+    overflow: hidden;
+  }
+  .actions-dropdown.open { display: block; }
+  .actions-dropdown button {
+    display: block; width: 100%; text-align: right; padding: 8px 14px;
+    background: none; border: none; color: var(--text); font-size: 12px; cursor: pointer;
+    white-space: nowrap;
+  }
+  .actions-dropdown button:hover { background: var(--bg); }
+  .line-tab {
+    padding: 6px 10px; font-size: 11px; font-weight: 600; cursor: pointer;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s; user-select: none;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .line-tab:hover { color: var(--text); }
+  .line-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .line-tab-move { opacity: 0.6; cursor: pointer; font-size: 18px; font-weight: bold; padding: 0 6px; vertical-align: middle; border-radius: 4px; line-height: 1; }
+  .line-tab-move:hover { opacity: 1; color: var(--accent); background: var(--border); }
+  .line-tab-add {
+    padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--muted);
+    background: none; border: 1px dashed var(--border); border-radius: 4px;
+    margin-left: 4px; transition: color 0.15s, border-color 0.15s;
+  }
+  .line-tab-add:hover { color: var(--accent); border-color: var(--accent); }
+  .line-tab-content { margin-top: 12px; }
+  .line-tab-props { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .line-tab-props label { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+  .line-tab-props select, .line-tab-props input {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text); padding: 4px 6px; font-size: 12px; min-width: 100px;
+  }
+  .line-tab-props input[type="color"] { width: 32px; height: 26px; padding: 0; border: 1px solid var(--border); cursor: pointer; }
+
+  /* Segment palette — tabbed */
+
+  .palette-search-inline {
+    width: 100%; padding: 8px 12px; border-radius: 6px;
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    font-size: 13px; outline: none; transition: border-color 0.15s;
+    box-sizing: border-box; margin-bottom: 8px;
+  }
+  .palette-search-inline:focus { border-color: var(--accent); }
+  .palette-search-inline::placeholder { color: var(--muted); }
+  .palette-tabs {
+    display: flex; gap: 0; margin-bottom: 12px; border-bottom: 1px solid var(--border);
+  }
+  .palette-tab {
+    padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s; user-select: none;
+  }
+  .palette-tab:hover { color: var(--text); }
+  .palette-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .palette-tab-search { padding: 8px 12px; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; }
+  .palette-content { min-height: 80px; }
+  .palette-group { display: flex; flex-direction: column; gap: 4px; }
+  .palette-accordion { display: flex; flex-direction: column; gap: 8px; }
+  .accordion-section { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .accordion-header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: rgba(255,255,255,0.02); cursor: pointer; user-select: none;
+    font-size: 12px; font-weight: 600; color: var(--text);
+    border-bottom: 1px solid transparent; transition: background 0.15s;
+  }
+  .accordion-header:hover { background: rgba(255,255,255,0.05); }
+  .accordion-section.open .accordion-header { border-bottom-color: var(--border); }
+  .accordion-arrow {
+    font-size: 10px; color: var(--muted); transition: transform 0.15s;
+    flex-shrink: 0; width: 12px; text-align: center;
+  }
+  .accordion-section.open .accordion-arrow { transform: rotate(90deg); }
+  .accordion-count {
+    font-size: 10px; font-weight: 400; color: var(--muted);
+    margin-left: auto;
+  }
+  .accordion-body {
+    display: none; padding: 6px; flex-direction: column; gap: 4px;
+  }
+  .accordion-section.open .accordion-body { display: flex; }
+  .palette-seg-wrapper { display: flex; flex-direction: column; }
+  .palette-seg {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: grab;
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    user-select: none; transition: border-color 0.15s;
+  }
+  .palette-seg-wrapper.expanded .palette-seg {
+    border-radius: 6px 6px 0 0; border-bottom-color: transparent;
+  }
+  .palette-seg:hover { border-color: var(--accent); }
+  .palette-seg.dragging { opacity: 0.4; }
+  .palette-seg .seg-grip { color: var(--muted); opacity: 0.4; font-size: 10px; flex-shrink: 0; }
+  .palette-seg .seg-label { font-weight: 600; white-space: nowrap; width: 100px; flex-shrink: 0; }
+  .palette-seg .seg-preview {
+    font-family: 'SF Mono', Menlo, monospace; font-size: 10px;
+    background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 3px;
+    opacity: 0.7; width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: center;
+  }
+  .palette-seg .seg-desc {
+    font-size: 11px; color: var(--muted); flex: 1; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .palette-seg .seg-chevron {
+    color: var(--muted); font-size: 10px; flex-shrink: 0; cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .palette-seg-wrapper.expanded .seg-chevron { transform: rotate(180deg); }
+  .palette-detail {
+    display: none; padding: 10px 16px 12px 32px;
+    background: var(--bg); border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 6px 6px; font-size: 11px; line-height: 1.6;
+  }
+  .palette-seg-wrapper.expanded .palette-detail { display: block; }
+  .palette-detail .detail-row {
+    display: flex; gap: 8px; margin-bottom: 4px;
+  }
+  .palette-detail .detail-label {
+    color: var(--muted); width: 60px; flex-shrink: 0; text-align: right;
+  }
+  .palette-detail .detail-value { color: var(--text); }
+  .palette-detail .detail-scenarios {
+    margin-top: 6px; display: flex; flex-direction: column; gap: 3px;
+  }
+  .palette-detail .detail-scenario {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'SF Mono', Menlo, monospace; font-size: 10px;
+  }
+  .palette-detail .detail-scenario .scenario-label {
+    color: var(--muted); width: 80px; flex-shrink: 0; text-align: right;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 11px;
+  }
+  .palette-detail .detail-scenario .scenario-mock {
+    background: rgba(0,0,0,0.3); padding: 1px 8px; border-radius: 3px;
+  }
+  .palette-seg .seg-custom-tag {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+    background: rgba(124, 58, 237, 0.25); color: #b388ff; border: 1px solid rgba(124, 58, 237, 0.4);
+    padding: 1px 5px; border-radius: 3px; flex-shrink: 0; line-height: 1.3;
+  }
+  .palette-detail .detail-internals {
+    margin-top: 8px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .palette-detail .detail-internals-title {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); padding: 4px 8px; background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+  }
+  .palette-detail .detail-internal-row {
+    display: flex; gap: 8px; padding: 3px 8px; font-size: 10px;
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+  }
+  .palette-detail .detail-internal-row:last-child { border-bottom: none; }
+  .palette-detail .detail-internal-label {
+    color: var(--muted); width: 80px; flex-shrink: 0;
+  }
+  .palette-detail .detail-internal-value {
+    color: var(--text); font-family: 'SF Mono', Menlo, monospace; font-size: 10px;
+  }
+  .palette-detail .detail-custom-note {
+    margin-top: 8px; padding: 6px 10px; border-radius: 4px; font-size: 10px;
+    background: rgba(124, 58, 237, 0.1); border: 1px solid rgba(124, 58, 237, 0.2); color: #b388ff;
+  }
+  .palette-detail .detail-custom-note code {
+    background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px; font-size: 10px;
+  }
+  .palette-detail .detail-config {
+    margin-top: 8px; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+  }
+  .palette-detail .detail-config-title {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); padding: 4px 8px; background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+  }
+  .palette-detail .detail-config table {
+    width: 100%; border-collapse: collapse; font-size: 10px;
+  }
+  .palette-detail .detail-config th {
+    text-align: left; padding: 3px 8px; color: var(--muted); font-weight: 600;
+    border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02);
+  }
+  .palette-detail .detail-config td {
+    padding: 3px 8px; border-bottom: 1px solid rgba(48,54,61,0.5);
+    font-family: 'SF Mono', Menlo, monospace; font-size: 10px;
+  }
+  .palette-detail .detail-config tr:last-child td { border-bottom: none; }
+  .palette-detail .detail-config .cfg-field { color: var(--accent); }
+  .palette-detail .detail-config .cfg-type { color: var(--muted); }
+  .palette-detail .detail-config .cfg-default { color: var(--orange); }
+  .palette-detail .detail-config .cfg-desc { color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .palette-empty { color: var(--muted); font-size: 12px; padding: 16px; text-align: center; }
+
+
+  .line-preview {
+    margin-top: 6px; padding: 4px 12px; border-radius: 6px;
+    background: #000; border: 1px solid var(--border);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+    font-size: 12px; line-height: 1.4; white-space: nowrap; overflow: visible;
+  }
+
+
+  /* Segment drop zone */
+  .seg-zone {
+    min-height: 40px; border: 2px dashed var(--border); border-radius: 6px;
+    display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; align-items: center;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  body.dragging .preview-wrap, body.dragging .seg-editor { opacity: 0.15; transition: opacity 0.2s; }
+  body.dragging .palette-content { opacity: 0.25; transition: opacity 0.2s; }
+  body.dragging .palette-tabs { opacity: 0.25; transition: opacity 0.2s; }
+  .seg-zone.drag-ready { border-color: var(--accent); border-style: dashed; animation: zone-pulse 1.5s ease-in-out infinite; }
+  .seg-zone.drag-over { border-color: var(--accent); border-style: solid; background: rgba(124,58,237,0.08); animation: none; }
+  .seg-zone.empty::after { content: 'Drop segments here'; color: var(--muted); font-size: 12px; }
+  @keyframes zone-pulse { 0%,100% { border-color: var(--border); } 50% { border-color: var(--accent); } }
+  .seg-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 8px; border-radius: 4px; font-size: 12px;
+    background: var(--bg); border: 1px solid var(--border); cursor: grab;
+    user-select: none; position: relative; transition: transform 0.1s;
+  }
+  .seg-chip:hover { border-color: var(--accent); }
+  .seg-chip.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .seg-chip.drag-source { opacity: 0.3; }
+  .seg-chip .remove { cursor: pointer; color: var(--muted); font-size: 14px; margin-left: 2px; }
+  .seg-chip .remove:hover { color: var(--red); }
+  .seg-chip .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* Clickable preview segments */
+  .seg-click { cursor: pointer; border-radius: 2px; transition: background 0.15s; }
+  .seg-click:hover { background: rgba(255,255,255,0.08); }
+
+  /* Selected segment indicator in line preview */
+  .lp-seg-indicator { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); pointer-events: none; color: #39ff14; font-size: 16px; line-height: 1; }
+
+  /* Drop insertion indicator */
+  .drop-indicator {
+    width: 2px; height: 28px; background: var(--accent); border-radius: 1px;
+    box-shadow: 0 0 6px var(--accent), 0 0 12px rgba(88,166,255,0.3);
+    pointer-events: none; flex-shrink: 0; transition: opacity 0.1s;
+  }
+
+  /* Segment options editor */
+  .seg-editor {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; margin-top: 6px; margin-bottom: 6px; display: none;
+  }
+  .seg-editor.active { display: block; }
+  .seg-editor h3 { font-size: 13px; margin-bottom: 8px; color: var(--accent); }
+  .seg-editor .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .seg-editor label { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+  .seg-editor input, .seg-editor select { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 4px 6px; font-size: 12px; }
+  .seg-editor input[type="color"] { width: 32px; height: 26px; padding: 0; cursor: pointer; }
+  .seg-editor input[type="checkbox"] { width: 16px; height: 16px; }
+  .seg-editor input[type="text"] { min-width: 180px; }
+
+  /* Buttons */
+  .btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--border); transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent-dim); color: #fff; border-color: var(--accent-dim); }
+  .btn-primary:hover { background: var(--accent); }
+  .btn-secondary { background: var(--surface); color: var(--text); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-danger { background: transparent; color: var(--red); border-color: var(--red); }
+  .btn-danger:hover { background: rgba(248,81,73,0.1); }
+
+  /* Preset bar */
+  .preset-bar {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    margin-bottom: 12px; padding: 0 2px;
+  }
+  .preset-bar-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin-right: 4px; font-weight: 600;
+  }
+  .preset-btn {
+    padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); transition: all 0.15s; white-space: nowrap;
+  }
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .preset-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+  .nf-toggle { display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; font-size: 11px; color: var(--muted); }
+  .nf-toggle input { width: 13px; height: 13px; cursor: pointer; }
+  .nf-toggle label { cursor: pointer; user-select: none; }
+  .nf-hint {
+    display: none; position: fixed; z-index: 200;
+    background: var(--surface); border: 1px solid rgba(88,166,255,0.4);
+    border-radius: 8px; padding: 14px 18px; font-size: 12px; line-height: 1.6; color: var(--text);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); width: 420px;
+  }
+  .nf-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 199; }
+  .nf-hint code { font-family: 'SF Mono','Fira Code',Menlo,monospace; font-size: 11px; background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px; }
+  .nf-hint a { color: var(--accent); text-decoration: none; }
+  .nf-hint a:hover { text-decoration: underline; }
+  .nf-hint .nf-dismiss { float: right; cursor: pointer; color: var(--muted); font-size: 16px; line-height: 1; margin: -4px -4px 0 8px; }
+  .nf-hint .nf-dismiss:hover { color: var(--text); }
+
+  /* JSON output */
+  .json-wrap { position: relative; }
+  .json-out {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+    line-height: 1.5; white-space: pre-wrap; word-break: break-all; max-height: 400px;
+    overflow-y: auto; color: var(--green);
+  }
+  .copy-toast { position: fixed; bottom: 24px; right: 24px; background: var(--green); color: #000; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .copy-toast.show { opacity: 1; }
+
+  /* Dialogs */
+  dialog { margin: auto; }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+  .ascii-overlay { display: none; position: fixed; inset: 0; z-index: 300; pointer-events: none; }
+  .ascii-overlay.open { display: block; }
+  .ascii-overlay .ascii-scrim {
+    position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); pointer-events: auto;
+  }
+  .ascii-overlay .ascii-panel {
+    position: relative; z-index: 301; max-width: 520px; width: 90%; margin: 0 auto;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px; pointer-events: auto;
+  }
+  body.ascii-art-open .preview-wrap { position: relative; z-index: 302; }
+
+  /* Icon picker */
+  .icon-field { display: flex; align-items: end; gap: 4px; position: relative; }
+  .icon-btn {
+    padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    white-space: nowrap; transition: border-color 0.15s;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--text); }
+  .icon-picker {
+    display: none; position: absolute; top: 100%; left: 0; z-index: 100;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; width: 380px; max-height: 420px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .icon-picker.open { display: block; }
+  .icon-picker-search {
+    width: 100%; padding: 6px 8px; margin-bottom: 8px; border-radius: 4px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text); font-size: 12px;
+  }
+  .icon-picker-tabs { display: flex; gap: 2px; margin-bottom: 8px; flex-wrap: wrap; }
+  .icon-picker-tab {
+    padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
+    background: var(--bg); border: 1px solid transparent; color: var(--muted);
+  }
+  .icon-picker-tab:hover { color: var(--text); }
+  .icon-picker-tab.active { border-color: var(--accent); color: var(--accent); }
+  .icon-grid {
+    display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px;
+    max-height: 280px; overflow-y: auto; padding: 2px;
+  }
+  .icon-grid::-webkit-scrollbar { width: 6px; }
+  .icon-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .icon-cell {
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; cursor: pointer; border-radius: 4px; transition: background 0.1s;
+  }
+  .icon-cell:hover { background: var(--border); }
+  .icon-cell.selected { background: var(--accent-dim); outline: 2px solid var(--accent); }
+</style>
+</head>
+<body>
+<div class="navbar">
+  <div class="nav-inner">
+    <div class="logo">
+      <span>oh-my-line</span><span style="color:var(--muted)">(s)</span>
+      <span class="logo-sub">Config Builder</span>
+    </div>
+    <div class="nav-links">
+      <a href="https://jamesprnich.github.io/oh-my-line/site/">Site</a>
+      <a href="https://jamesprnich.github.io/oh-my-line/docs/">Docs</a>
+      <a href="https://github.com/jamesprnich/oh-my-line" style="display:inline-flex;align-items:center"><svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    </div>
+  </div>
+</div>
+<div class="app">
+
+  <div class="preset-bar" id="presetBar"></div>
+
+  <div class="card preview-wrap">
+    <div class="card-title">Preview</div>
+    <div class="preview" id="preview"></div>
+  </div>
+
+  <div class="preview-arrow" id="linesSentinel">&#8593; live preview updates as you edit</div>
+  <div class="card lines-wrap">
+    <div class="card-title">Line Builder</div>
+    <div class="line-tabs-wrap">
+      <div class="line-tabs" id="lineTabs"></div>
+      <div class="line-tabs-actions" id="lineTabsActions"></div>
+    </div>
+    <div class="line-tab-content" id="lineTabContent"></div>
+  </div>
+
+  <div class="card palette-wrap">
+    <div class="card-title">Segments</div>
+    <div class="palette-tabs" id="paletteTabs"></div>
+    <div class="palette-content" id="paletteContent"></div>
+  </div>
+
+  <div class="seg-editor" id="segEditor">
+    <h3 id="segEditorTitle">Segment Options</h3>
+    <div id="segEditorDesc" style="font-size:12px;color:var(--muted);margin:-4px 0 6px 0;display:none;"></div>
+    <div class="row">
+      <label>Color <input type="color" id="seColor" value="#ffffff"></label>
+      <label>Background <input type="color" id="seBg" value="#000000"></label>
+      <label>Bold <input type="checkbox" id="seBold"></label>
+      <label>Dim <input type="checkbox" id="seDim"></label>
+      <label id="seNfIconLabel" style="display:none;">Icon <input type="checkbox" id="seNfIcon"></label>
+      <div id="seConfigFields" style="display:contents;"></div>
+      <div class="icon-field" id="seIconField" style="display:none;">
+        <label style="font-size:11px; color:var(--muted); display:flex; flex-direction:column; gap:2px;">Icon
+          <input type="text" id="seIconInput" value="" style="background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); padding:4px 6px; font-size:14px; width:50px; text-align:center;">
+        </label>
+        <button class="icon-btn" onclick="toggleSegIconPicker()" title="Pick icon">Browse</button>
+        <div class="icon-picker" id="segIconPicker">
+          <input type="text" class="icon-picker-search" id="segIconSearch" placeholder="Search emoji..." oninput="filterSegIcons(this.value)" onclick="event.stopPropagation()">
+          <div class="icon-picker-tabs" id="segIconTabs"></div>
+          <div class="icon-grid" id="segIconGrid"></div>
+        </div>
+      </div>
+      <button class="btn btn-secondary" onclick="clearSegStyle()" style="align-self:end;">Reset</button>
+    </div>
+  </div>
+
+
+  <div class="card json-wrap">
+    <div class="card-title">Generated Config</div>
+    <pre class="json-out" id="jsonOut"></pre>
+  </div>
+</div>
+<div class="nf-overlay" id="nfOverlay"></div>
+<div class="nf-hint" id="nfHint">
+  <span class="nf-dismiss" onclick="dismissNfHint()" title="Dismiss">&times;</span>
+  <strong>Nerd Font icons</strong> require a <a href="https://www.nerdfonts.com/" target="_blank">Nerd Font</a> installed and set as your terminal font.
+  <div style="margin:8px 0 4px; font-size:11px; line-height:1.8; color:var(--muted);">
+    <strong style="color:var(--text);">Setup (macOS):</strong><br>
+    1. Install a Nerd Font &mdash; e.g. <code style="color:var(--green)">brew install font-hack-nerd-font</code><br>
+    2. In VS Code: set <code style="color:var(--green)">terminal.integrated.fontFamily</code> to <code style="color:var(--green)">Hack Nerd Font</code><br>
+    3. Restart your terminal
+  </div>
+  <a href="https://github.com/ryanoasis/nerd-fonts#font-installation" target="_blank">Full installation docs &rarr;</a>
+</div>
+<div class="copy-toast" id="toast">Copied to clipboard</div>
+
+<dialog id="importDialog" style="background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:20px; max-width:500px; width:90%;">
+  <h3 style="margin-bottom:12px;">Import Config</h3>
+  <p style="font-size:12px; color:var(--muted); margin-bottom:8px;">Paste your oh-my-line.json:</p>
+  <textarea id="importText" style="width:100%; height:200px; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:monospace; font-size:12px; padding:8px; resize:vertical;"></textarea>
+  <div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-end;">
+    <button class="btn btn-secondary" onclick="document.getElementById('importDialog').close()">Cancel</button>
+    <button class="btn btn-primary" onclick="doImport()">Import</button>
+  </div>
+</dialog>
+
+<dialog id="settingsDialog" style="background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:20px; max-width:420px; width:90%;">
+  <h3 style="margin-bottom:16px;">Settings</h3>
+  <label style="font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:4px;">
+    Usage Proxy
+    <input type="text" id="usageProxyInput" value="" placeholder="http://host:port" style="background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); padding:6px 10px; font-size:13px; width:100%;">
+  </label>
+  <p style="font-size:11px; color:var(--muted); margin-top:6px; line-height:1.5;">
+    Base URL for an <a href="https://github.com/jamesprnich/ai-usage-proxy-spec" target="_blank" style="color:var(--accent);">ai-usage-proxy-spec</a> proxy. Provider endpoints are appended automatically. Leave empty for direct API.
+  </p>
+  <div style="display:flex; gap:8px; margin-top:16px; justify-content:flex-end;">
+    <button class="btn btn-primary" onclick="closeSettings()">Save</button>
+  </div>
+</dialog>
+
+<div class="ascii-overlay" id="asciiArtOverlay">
+  <div class="ascii-scrim" onclick="cancelAsciiArt()"></div>
+  <div class="ascii-panel" id="asciiArtContent"></div>
+</div>
+
+<script src="engine/wasm_exec.js"></script>
+<script>
+// ── Segment type definitions with descriptions ──────────────────────────────
+
+const STYLE_CONFIG = [
+  { field: 'style.color', type: 'hex', default: '(per type)', desc: 'Override segment color' },
+  { field: 'style.background', type: 'hex', desc: 'Background color' },
+  { field: 'style.bold', type: 'bool', default: 'false', desc: 'Bold text' },
+  { field: 'style.dim', type: 'bool', default: 'false', desc: 'Dim text' },
+];
+
+const PREFIX_SUFFIX_CONFIG = [
+  { field: 'prefix', type: 'string', desc: 'Text shown before segment (dim)' },
+  { field: 'suffix', type: 'string', desc: 'Text shown after segment (dim)' },
+];
+
+const PAD_CONFIG = [
+  { field: 'padLeft', type: 'number', desc: 'Spaces before segment' },
+  { field: 'padRight', type: 'number', desc: 'Spaces after segment' },
+];
+
+// Types excluded from prefix/suffix (they ARE the content)
+const NO_PREFIX_SUFFIX = ['text', 'sep', 'custom-icon'];
+
+const PALETTE_GROUPS = [
+  { name: 'Workspace', types: [
+    { type: 'dir',        label: 'Dir',        color: '#2e9599', mock: '.claude',           desc: 'Current working directory name',
+      details: { how: 'Shows the basename of the current working directory passed by Claude Code.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: cwd field (basename extracted)' },
+        ],
+        scenarios: [
+          { label: 'Project root', mock: 'my-app' },
+          { label: 'Nested dir', mock: 'src' },
+        ]}},
+    { type: 'custom-icon', label: 'Icon',      color: '#ffffff', mock: '\u2728',          desc: 'User-chosen emoji icon',
+      config: [{ field: 'content', label: 'emoji', type: 'string', desc: 'Emoji character' }],
+      details: { how: 'Displays the emoji or character you set in the segment\'s <b>content</b> field.', refresh: 'Static', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Segment config: content field' },
+        ],
+        scenarios: [
+          { label: 'Llama', mock: '\u{1F999}' },
+          { label: 'Sparkles', mock: '\u2728' },
+        ]}},
+    { type: 'text',        label: 'Text',      color: '#aaaaaa', mock: 'custom text',     desc: 'Custom static text',
+      config: [{ field: 'content', label: 'text', type: 'string', desc: 'Text to display' }],
+      details: { how: 'Renders the literal string from the segment\'s <b>content</b> field.', refresh: 'Static', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Segment config: content field' },
+        ],
+        scenarios: [
+          { label: 'Label', mock: 'my-project' },
+          { label: 'Divider', mock: '\u2022 \u2022 \u2022' },
+        ]}},
+    { type: 'sep',         label: 'Separator',  color: '#666666', mock: '|',               desc: 'Visual separator character',
+      config: [{ field: 'content', label: 'character', type: 'string', desc: 'Separator character(s)' }],
+      details: { how: 'Renders a dimmed separator. Defaults to <code>|</code> but can be customized via content.', refresh: 'Static', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Segment config: content field (default: |)' },
+        ],
+        scenarios: [
+          { label: 'Pipe', mock: '<span style="opacity:0.5">|</span>' },
+          { label: 'Dot', mock: '<span style="opacity:0.5">\u00b7</span>' },
+          { label: 'Slash', mock: '<span style="opacity:0.5">/</span>' },
+        ]}},
+    { type: 'command',     label: 'Command',    color: '#aaaaaa', mock: '$ echo hello',    desc: 'Output from a shell command (cached)',
+      config: [{ field: 'content', label: 'command', type: 'string', desc: 'Shell command to execute' }, { field: 'cache', type: 'number', default: '60', desc: 'Cache duration in seconds' }, { field: 'timeout', type: 'number', default: '3', desc: 'Max execution time in seconds' }],
+      details: { how: 'Executes a shell command and displays its stdout. Results are cached (default 60s, configurable via <b>cache</b> field). Only runs from the global config for security.', refresh: 'Cached (default 60s)', requires: 'Global config only',
+        internals: [
+          { label: 'Data source', value: 'Shell command output (content field = command to run)' },
+          { label: 'Execution', value: 'Runs as current user via bash -c' },
+          { label: 'Timeout', value: '3s (killed if exceeded)' },
+          { label: 'Default cache', value: '60s (configurable per-segment via cache field)' },
+          { label: 'Security', value: 'Only loaded from global config (~/.oh-my-line/config.json)' },
+        ],
+        scenarios: [
+          { label: 'Uptime', mock: 'up 3d 12h' },
+          { label: 'Custom', mock: 'v2.1.0-beta' },
+        ]}},
+    { type: 'env',        label: 'Env Var',    color: '#c678dd', mock: 'production',       desc: 'Value of an environment variable',
+      config: [{ field: 'content', label: 'variable', type: 'string', desc: 'Environment variable name (e.g. NODE_ENV)' }],
+      details: { how: 'Reads the value of the specified environment variable. Hidden when the variable is unset or empty.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'os.Getenv(content)' },
+          { label: 'Empty handling', value: 'Segment hidden when var is unset or empty' },
+        ],
+        scenarios: [
+          { label: 'NODE_ENV', mock: 'production' },
+          { label: 'SHELL', mock: '/bin/zsh' },
+          { label: 'Unset', mock: '' },
+        ]}},
+    { type: 'version',    label: 'Version',    color: '#888888', mock: 'v1.0.0',           desc: 'oh-my-line version number',
+      details: { how: 'Reads the VERSION file from the oh-my-line install directory.', refresh: 'Static', requires: null,
+        internals: [
+          { label: 'Data source', value: '~/.oh-my-line/VERSION file' },
+        ],
+        scenarios: [
+          { label: 'Current', mock: '<span style="color:#888">v1.0.0</span>' },
+        ]}},
+    { type: 'message',    label: 'Message',    color: '#888888', mock: '\u2014 rotating msg \u2014', desc: 'Rotating message — set messages array and interval on the segment',
+      config: [{ field: 'messages', type: 'string[]', desc: 'Rotation message list' }, { field: 'interval', type: 'number', default: '300', desc: 'Rotation interval in seconds' }],
+      details: { how: 'Set <code>messages</code> (array of strings) and <code>interval</code> (seconds) directly on the segment. Rotates based on time.', refresh: 'Rotates every 5 min (configurable)', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Segment config: messages array + interval (seconds)' },
+        ],
+        scenarios: [
+          { label: 'Tip', mock: '<span style="opacity:0.6">\u2014 Ask me about refactoring \u2014</span>' },
+          { label: 'Quote', mock: '<span style="opacity:0.6">\u2014 Ship it! \u2014</span>' },
+        ]}},
+  ]},
+  { name: 'Product', types: [
+    { type: 'icon',       label: 'Icon',       color: '#ffffff', mock: '\u{1F999}',                 desc: 'Product icon — set content inline or source from .product.json',
+      config: [{ field: 'content', label: 'icon', type: 'string', desc: 'Inline icon override' }, { field: 'source', type: 'string', desc: 'File path (e.g. ".product.json")' }],
+      details: { how: 'Set <code>content</code> for an inline value, or <code>source: ".product.json"</code> to read from a shared product file.', refresh: 'Static (config load)', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Segment config content field or .product.json icon' },
+        ],
+        scenarios: [
+          { label: 'Llama', mock: '\u{1F999}' },
+          { label: 'Gear', mock: '\u2699\ufe0f' },
+        ]}},
+    { type: 'label',      label: 'Label',      color: '#ffffff', mock: 'My App',                    desc: 'Product name — set content inline or source from .product.json',
+      config: [{ field: 'content', label: 'name', type: 'string', desc: 'Inline label override' }, { field: 'source', type: 'string', desc: 'File path (e.g. ".product.json")' }],
+      details: { how: 'Set <code>content</code> for an inline value, or <code>source: ".product.json"</code> to read from a shared product file. Rendered bold.', refresh: 'Static (config load)', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Segment config content field or .product.json name' },
+        ],
+        scenarios: [
+          { label: 'Product', mock: '<b>My App</b>' },
+        ]}},
+    { type: 'tagline',    label: 'Tagline',    color: '#888888', mock: 'Built with Claude Code',                desc: 'Product subtitle — set content inline or source from .product.json',
+      config: [{ field: 'content', label: 'tagline', type: 'string', desc: 'Inline tagline override' }, { field: 'source', type: 'string', desc: 'File path (e.g. ".product.json")' }],
+      details: { how: 'Set <code>content</code> for an inline value, or <code>source: ".product.json"</code> to read from a shared product file. Rendered dimmed.', refresh: 'Static (config load)', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Segment config content field or .product.json tagline' },
+        ],
+        scenarios: [
+          { label: 'Tagline', mock: '<span style="opacity:0.6">Built with Claude Code</span>' },
+        ]}},
+  ]},
+  { name: 'Claude Code', _sectionDefs: [
+    { name: 'Identity & Mode', typeNames: ['model', 'model-id', 'cc-version', 'effort', 'vim-mode', 'agent', '200k-warn'] },
+    { name: 'Context Window', typeNames: ['tokens', 'pct-used', 'pct-remain', 'compact-warn', 'total-tokens', 'cache-hit', 'ctx-spark', 'ctx-target'] },
+    { name: 'Costs & Burn', typeNames: ['session-cost', 'cost', 'cost-min', 'cost-hr', 'cost-7d', 'cost-spark', 'burn-min', 'burn-hr', 'burn-spark'] },
+    { name: 'Session Stats', typeNames: ['session-duration', 'api-wait', 'rate-session', 'rate-weekly', 'rate-extra', 'rate-opus', 'rate-spark', 'rate-target', 'eta-session', 'eta-session-min', 'eta-session-hr', 'eta-weekly', 'eta-weekly-min', 'eta-weekly-hr'] },
+  ], types: [
+    { type: 'model',      label: 'Model',      color: '#0099ff', mock: 'Claude Opus 4.6', desc: 'Current model name from Claude Code',
+      details: { how: 'Reads <code>model.display_name</code> from the Claude Code status JSON piped to stdin.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: model.display_name' },
+        ],
+        scenarios: [
+          { label: 'Opus', mock: '<span style="color:#0099ff">Claude Opus 4.6</span>' },
+          { label: 'Sonnet', mock: '<span style="color:#0099ff">Claude Sonnet 4.6</span>' },
+          { label: 'Haiku', mock: '<span style="color:#0099ff">Claude Haiku 4.5</span>' },
+        ]}},
+    { type: 'tokens',     label: 'Tokens',     color: '#ffb055', mock: '65k/200k',        desc: 'Context window usage (current/total)',
+      details: { how: 'Computes <code>input_tokens + cache_creation + cache_read</code> vs <code>context_window_size</code>. Numbers are formatted with k/m suffixes.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: input_tokens + cache_creation_input_tokens + cache_read_input_tokens / context_window_size' },
+        ],
+        scenarios: [
+          { label: 'Early', mock: '<span style="color:#ffb055">12k/200k</span>' },
+          { label: 'Mid', mock: '<span style="color:#ffb055">95k/200k</span>' },
+          { label: 'Full', mock: '<span style="color:#ffb055">185k/200k</span>' },
+        ]}},
+    { type: 'pct-used',   label: '% Used',     color: '#00a000', mock: '32% used',         desc: 'Percentage of context window consumed',
+      details: { how: 'Percentage of context window filled. Color shifts green \u2192 amber \u2192 red as usage increases.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Computed: (current_tokens / context_window_size) \u00d7 100' },
+        ],
+        scenarios: [
+          { label: 'Low', mock: '<span style="color:#00a000">18% <span style="opacity:0.5">used</span></span>' },
+          { label: 'Medium', mock: '<span style="color:#e6c800">55% <span style="opacity:0.5">used</span></span>' },
+          { label: 'High', mock: '<span style="color:#f85149">89% <span style="opacity:0.5">used</span></span>' },
+        ]}},
+    { type: 'pct-remain', label: '% Remain',   color: '#2e9599', mock: '68% remain',       desc: 'Percentage of context window remaining',
+      details: { how: 'Inverse of % Used \u2014 shows how much headroom is left.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Computed: 100 \u2212 (current_tokens / context_window_size) \u00d7 100' },
+        ],
+        scenarios: [
+          { label: 'Plenty', mock: '<span style="color:#2e9599">82% <span style="opacity:0.5">remain</span></span>' },
+          { label: 'Tight', mock: '<span style="color:#2e9599">11% <span style="opacity:0.5">remain</span></span>' },
+        ]}},
+    { type: 'compact-warn', label: 'Compact Warn', color: '#ff5555', mock: '⚠ COMPACTING SOON 8%', desc: 'High-visibility alert when context window is near full. Hidden when safe.',
+      config: [{ field: 'threshold', type: 'number', default: '10', desc: 'Show when remaining % is at or below this value' }],
+      details: { how: 'Computes remaining context percentage. Only renders when remaining % is at or below threshold (default 10%) — otherwise completely hidden.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Computed: context remaining % from stdin token fields' },
+          { label: 'Threshold', value: 'Configurable via content field (default 10)' },
+        ],
+        scenarios: [
+          { label: 'Triggered', mock: '<span style="color:#ff5555">⚠ COMPACTING SOON 8%</span>' },
+          { label: 'Custom 20%', mock: '<span style="color:#ff5555">⚠ COMPACTING SOON 18%</span>' },
+          { label: 'Safe', mock: '<span style="opacity:0.4">(hidden)</span>' },
+        ]}},
+    { type: 'effort',     label: 'Effort',     color: '#00a000', mock: 'effort: high',     desc: 'Current Claude Code effort level (low/med/high)',
+      details: { how: 'Reads the configured reasoning effort. Helpful to see if you\'re running in a low-cost mode.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: '$CLAUDE_CODE_EFFORT_LEVEL env var \u2192 ~/.claude/settings.json effortLevel' },
+        ],
+        scenarios: [
+          { label: 'Low', mock: '<span style="color:#2e9599">effort: low</span>' },
+          { label: 'Medium', mock: '<span style="color:#e6c800">effort: med</span>' },
+          { label: 'High', mock: '<span style="color:#00a000">effort: high</span>' },
+        ]}},
+    { type: 'burn-min',   label: 'Tok/min',    color: '#e6c800', mock: '2.1k/min',          desc: 'Token burn rate averaged over session (per minute)',
+      config: [{ field: 'warmup', type: 'number', default: '30', desc: 'Seconds before first reading' }],
+      details: { how: 'Tracks session start tokens and computes <code>(current \u2212 start) / elapsed_minutes</code>. Resets if tokens drop (context compaction).', refresh: 'Every render (needs \u226530s elapsed)', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: token delta over elapsed time' },
+          { label: 'Min elapsed', value: '30s before first reading' },
+          { label: 'State file', value: 'statusline-burn.dat' },
+          { label: 'No data', value: 'Shows dim \u2014/min' },
+        ],
+        scenarios: [
+          { label: 'Light', mock: '<span style="color:#e6c800">800/min</span>' },
+          { label: 'Heavy', mock: '<span style="color:#e6c800">4.2k/min</span>' },
+        ]}},
+    { type: 'burn-hr',    label: 'Tok/hr',     color: '#e6c800', mock: '126k/hr',           desc: 'Token burn rate averaged over session (per hour)',
+      config: [{ field: 'warmup', type: 'number', default: '30', desc: 'Seconds before first reading' }],
+      details: { how: 'Same calculation as Tok/min but scaled to per-hour. Good for estimating session cost.', refresh: 'Every render (needs \u226530s elapsed)', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: token delta over elapsed time (\u00d760)' },
+          { label: 'Min elapsed', value: '30s before first reading' },
+          { label: 'No data', value: 'Shows dim \u2014/hr' },
+        ],
+        scenarios: [
+          { label: 'Light', mock: '<span style="color:#e6c800">48k/hr</span>' },
+          { label: 'Heavy', mock: '<span style="color:#e6c800">252k/hr</span>' },
+        ]}},
+    { type: 'burn-spark', label: 'Burn Spark', color: '#e6c800', mock: '▁▂▃▅▆▇█▅', desc: 'Token burn rate trend (16 min window, 2 min bars)',
+      config: [{ field: 'width', type: 'number', default: '8', desc: 'Number of sparkline bars' }],
+      details: { how: '8-bar sparkline of token burn rate over time. Each bar is a 2-minute average, giving a 16-minute sliding window.', refresh: 'Every render, new bar every 2 min', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: token burn rate sampled into 2-min buckets' },
+          { label: 'Bars', value: '8' },
+          { label: 'Bucket size', value: '120s (2 min)' },
+          { label: 'Window', value: '16 min' },
+          { label: 'Warmup', value: '3 bars needed (\u22646 min)' },
+          { label: 'State file', value: 'statusline-spark.dat' },
+        ],
+        scenarios: [
+          { label: 'Ramping up', mock: '<span style="color:#e6c800">▁▁▂▃▄▅▆█</span>' },
+          { label: 'Steady', mock: '<span style="color:#e6c800">▄▄▅▄▄▅▄▄</span>' },
+          { label: 'Spike', mock: '<span style="color:#e6c800">▂▂▃▁▂█▇▃</span>' },
+          { label: 'Warmup', mock: '<span style="color:#e6c800">····▁▂</span> <span style="color:#888">8m</span>' },
+        ]}},
+    { type: 'ctx-spark',  label: 'Ctx Spark',  color: '#ffb055', mock: '▁▁▂▃▃▄▅▆', desc: 'Context fill trend (40 min window, 5 min bars)',
+      config: [{ field: 'width', type: 'number', default: '8', desc: 'Number of sparkline bars' }],
+      details: { how: '8-bar sparkline of context window fill percentage. Each bar is a 5-minute snapshot, covering 40 minutes of history.', refresh: 'Every render, new bar every 5 min', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: context fill % sampled into 5-min buckets' },
+          { label: 'Bars', value: '8' },
+          { label: 'Bucket size', value: '300s (5 min)' },
+          { label: 'Window', value: '40 min' },
+        ],
+        scenarios: [
+          { label: 'Filling', mock: '<span style="color:#ffb055">▁▂▃▃▄▅▆▇</span>' },
+          { label: 'Compacted', mock: '<span style="color:#ffb055">▅▆▇█▃▁▁▂</span>' },
+          { label: 'Stable', mock: '<span style="color:#ffb055">▄▄▄▄▄▅▄▄</span>' },
+        ]}},
+    { type: 'rate-spark', label: 'Rate Spark', color: '#39d2c0', mock: '▂▃▃▅▆▇█▅', desc: 'Session rate limit usage trend (adapts to your plan\'s window)',
+      config: [{ field: 'width', type: 'number', default: '8', desc: 'Number of sparkline bars' }],
+      details: { how: '8-bar sparkline of session rate limit utilization %. Bucket size adapts to your plan\'s window (default 5h \u2192 ~37 min bars).', refresh: 'Every render, adaptive bar interval', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'Data source', value: 'Anthropic API: session rate limit utilization %' },
+          { label: 'Bars', value: '8' },
+          { label: 'Bucket size', value: 'Adaptive (window \u00f7 8, min 60s)' },
+          { label: 'Auth', value: 'OAuth bearer token (via Claude Code session)' },
+        ],
+        scenarios: [
+          { label: 'Rising', mock: '<span style="color:#39d2c0">▁▂▃▄▅▆▇█</span>' },
+          { label: 'Post-reset', mock: '<span style="color:#39d2c0">▆▇█▅▃▂▁▁</span>' },
+          { label: 'Steady', mock: '<span style="color:#39d2c0">▃▃▄▃▃▄▃▃</span>' },
+        ]}},
+    { type: 'ctx-target',  label: 'Ctx Target',  color: '#00b400', mock: '<span style="color:#00b400">▁▂▃</span><span style="color:#e6c800">▄▅▆</span><span style="color:#ff5555">▇█</span>', desc: 'Context fill trend — green/amber/red target zones',
+      config: [{ field: 'warn', type: 'number', default: '50', desc: 'Amber threshold (%)' }, { field: 'critical', type: 'number', default: '80', desc: 'Red threshold (%)' }, { field: 'width', type: 'number', default: '8', desc: 'Number of sparkline bars' }],
+      details: { how: 'Context fill sparkline with 3 color zones. Each bar\'s color reflects how close you are to running out: <span style="color:#00b400">green</span> \u003c50%, <span style="color:#e6c800">amber</span> 50\u201380%, <span style="color:#ff5555">red</span> \u003e80%.', refresh: 'Every render, new bar every 5 min', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: context fill % sampled into 5-min buckets' },
+          { label: 'Bars', value: '8' },
+          { label: 'Bucket size', value: '300s (5 min)' },
+          { label: 'Thresholds', value: 'Green <50%, Amber 50\u201380%, Red >80%' },
+          { label: 'State file', value: 'statusline-target-spark.dat' },
+        ],
+        scenarios: [
+          { label: 'Safe session', mock: '<span style="color:#00b400">▁▂▃▃▃▄▄▄</span>' },
+          { label: 'Filling up', mock: '<span style="color:#00b400">▁▂▃</span><span style="color:#e6c800">▄▅▆</span><span style="color:#ff5555">▇█</span>' },
+          { label: 'Compacted', mock: '<span style="color:#ff5555">▆▇█</span><span style="color:#e6c800">▅▃</span><span style="color:#00b400">▂▁▁</span>' },
+          { label: 'Hovering', mock: '<span style="color:#00b400">▃▄</span><span style="color:#e6c800">▅▆▅</span><span style="color:#00b400">▄▃▃</span>' },
+        ]}},
+    { type: 'rate-target', label: 'Rate Target', color: '#00b400', mock: '<span style="color:#00b400">▁</span><span style="color:#e6c800">▃▅</span><span style="color:#ff5555">█</span><span style="color:#e6c800">▅▃</span><span style="color:#00b400">▂▁</span>', desc: 'Weekly rate limit trend — green/amber/red target zones (adapts to your plan\'s window)',
+      config: [{ field: 'warn', type: 'number', default: '50', desc: 'Amber threshold (%)' }, { field: 'critical', type: 'number', default: '80', desc: 'Red threshold (%)' }, { field: 'width', type: 'number', default: '8', desc: 'Number of sparkline bars' }],
+      details: { how: 'Weekly rate limit sparkline with 3 color zones. Bucket size adapts to your plan\'s window (default 7d \u2192 12-hour bars). <span style="color:#00b400">Green</span> \u003c50%, <span style="color:#e6c800">amber</span> 50\u201380%, <span style="color:#ff5555">red</span> \u003e80%.', refresh: 'Every render, adaptive bar interval', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'Data source', value: 'Anthropic API: weekly rate limit utilization %' },
+          { label: 'Bars', value: '8' },
+          { label: 'Bucket size', value: 'Adaptive (window \u00f7 14, min 3600s)' },
+          { label: 'Thresholds', value: 'Green <50%, Amber 50\u201380%, Red >80%' },
+          { label: 'Auth', value: 'OAuth bearer token (via Claude Code session)' },
+          { label: 'State file', value: 'statusline-target-spark.dat' },
+        ],
+        scenarios: [
+          { label: 'Easy week', mock: '<span style="color:#00b400">▁▂▃▃▄▄▅▅</span>' },
+          { label: 'Midweek spike', mock: '<span style="color:#00b400">▁</span><span style="color:#e6c800">▃▅</span><span style="color:#ff5555">█</span><span style="color:#e6c800">▅▃</span><span style="color:#00b400">▂▁</span>' },
+          { label: 'Burning out', mock: '<span style="color:#00b400">▁▂</span><span style="color:#e6c800">▃▅</span><span style="color:#ff5555">▆▇██</span>' },
+          { label: 'Weekend dip', mock: '<span style="color:#e6c800">▅▆</span><span style="color:#ff5555">▇█</span><span style="color:#e6c800">▆▅</span><span style="color:#00b400">▃▂</span>' },
+        ]}},
+    { type: 'cost',       label: 'Cost',         color: '#e6c800', mock: '~$0.42',             desc: 'Estimated input cost for this context window',
+      details: { how: 'Computes input-side cost from token counts and model-specific API pricing (Opus/Sonnet/Haiku). Prefixed with ~ since output tokens aren\'t available.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Pricing', value: 'Per 1M tokens (input / cache write / cache read)' },
+          { label: 'Opus', value: '$15.00 / $18.75 / $1.50' },
+          { label: 'Sonnet', value: '$3.00 / $3.75 / $0.30' },
+          { label: 'Haiku', value: '$0.25 / $0.30 / $0.025' },
+          { label: 'Unknown model', value: 'Defaults to Sonnet pricing' },
+          { label: 'Note', value: 'Input-only estimate (output tokens not in status JSON)' },
+        ],
+        scenarios: [
+          { label: 'Light', mock: '<span style="color:#e6c800">~$0.08</span>' },
+          { label: 'Heavy', mock: '<span style="color:#e6c800">~$3.45</span>' },
+        ]}},
+    { type: 'cost-min',   label: '$/min',        color: '#e6c800', mock: '~$0.03/min',         desc: 'Dollar burn rate per minute (uses input token price)',
+      details: { how: 'Multiplies token burn rate (from burn-rate datasource) by model\'s input token price. Uses input rate as blended rate.', refresh: 'Every render (needs \u226530s elapsed)', requires: null,
+        internals: [
+          { label: 'Depends on', value: 'burn-rate datasource (rate per minute)' },
+          { label: 'Min elapsed', value: '30s before first reading' },
+          { label: 'No data', value: 'Shows dim ~\u2014/min' },
+        ],
+        scenarios: [
+          { label: 'Light', mock: '<span style="color:#e6c800">~$0.01/min</span>' },
+          { label: 'Heavy', mock: '<span style="color:#e6c800">~$0.12/min</span>' },
+        ]}},
+    { type: 'cost-hr',    label: '$/hr',         color: '#e6c800', mock: '~$1.80/hr',          desc: 'Dollar burn rate per hour (uses input token price)',
+      details: { how: 'Same as $/min but scaled to per-hour. Good for budgeting sessions.', refresh: 'Every render (needs \u226530s elapsed)', requires: null,
+        internals: [
+          { label: 'Depends on', value: 'burn-rate datasource (rate per hour)' },
+          { label: 'No data', value: 'Shows dim ~\u2014/hr' },
+        ],
+        scenarios: [
+          { label: 'Light', mock: '<span style="color:#e6c800">~$0.50/hr</span>' },
+          { label: 'Heavy', mock: '<span style="color:#e6c800">~$7.20/hr</span>' },
+        ]}},
+    { type: 'cost-7d',    label: 'Cost 7d',      color: '#e6c800', mock: '~$12.50 (7d)',       desc: 'Accumulated input cost over the past 7 days',
+      details: { how: 'Sums daily cost log files from <code>~/.oh-my-line/cost/</code>. Each Claude instance atomically appends cost deltas. Files older than 8 days are pruned.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Log dir', value: '~/.oh-my-line/cost/' },
+          { label: 'File format', value: 'YYYY-MM-DD.dat (one line per cost delta in cents)' },
+          { label: 'Prune age', value: '8 days' },
+          { label: 'Concurrency', value: 'Atomic append (\u003cPIPE_BUF), safe for multiple instances' },
+          { label: 'Baseline', value: 'statusline-cost-base.dat (tracks token deltas)' },
+        ],
+        scenarios: [
+          { label: 'Light week', mock: '<span style="color:#e6c800">~$3.20 (7d)</span>' },
+          { label: 'Heavy week', mock: '<span style="color:#e6c800">~$48.75 (7d)</span>' },
+        ]}},
+    { type: 'cost-spark', label: 'Cost Spark',   color: '#e6c800', mock: '▁▂▅▃▇▄▂',           desc: 'Daily cost sparkline — 7 bars, one per day',
+      details: { how: '7-bar sparkline showing daily cost totals over the past week. Uses · for days with no data.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Bars', value: '7 (one per day)' },
+          { label: 'Data source', value: '~/.oh-my-line/cost/YYYY-MM-DD.dat' },
+          { label: 'No data day', value: 'Shows · (middle dot)' },
+        ],
+        scenarios: [
+          { label: 'Active week', mock: '<span style="color:#e6c800">▁▂▅▃▇▄▂</span>' },
+          { label: 'Weekend dip', mock: '<span style="color:#e6c800">▅▇▆▃··▁</span>' },
+          { label: 'Steady', mock: '<span style="color:#e6c800">▃▄▃▄▃▄▃</span>' },
+        ]}},
+    { type: 'rate-session',    label: 'Session Rate', color: '#dcdcdc', mock: '<span style="color:#dcdcdc">5h</span> <span style="color:#00a000">\u25cf\u25cf\u25cf\u25cb\u25cb\u25cb</span> <span style="color:#2e9599">50%</span>',  desc: 'Session rate limit usage with progress bar (window auto-adapts to your plan)',
+      config: [{ field: 'barStyle', type: 'select', options: ['dot', 'block'], default: 'dot', desc: 'Bar character style: dot (●○) or block (▓░)' }, { field: 'showReset', type: 'checkbox', default: true, desc: 'Show reset time (e.g. @11:00am)' }],
+      details: { how: 'Fetches your session rate limit usage from the Anthropic API. Shows a filled/empty dot bar, percentage, and reset time. The window label (e.g. 5h, 3h) auto-adapts to your plan.', refresh: 'API cached 60s', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'API endpoint', value: 'api.anthropic.com/api/oauth/usage' },
+          { label: 'Auth', value: 'OAuth bearer token (env \u2192 Keychain \u2192 .credentials.json \u2192 GNOME Keyring)' },
+          { label: 'Cache TTL', value: '60s' },
+          { label: 'Timeout', value: '3s connect / 5s total' },
+          { label: 'Stale threshold', value: '5 min (shows dim "stale" warning)' },
+          { label: 'No data', value: 'Shows dim "5h \u2014"' },
+          { label: 'Error handling', value: 'Error responses not cached; falls back to last valid cache' },
+        ],
+        scenarios: [
+          { label: 'Low', mock: '<span style="color:#dcdcdc">5h</span> <span style="color:#00a000">\u25cf\u25cf\u25cb\u25cb\u25cb\u25cb</span> <span style="color:#2e9599">28%</span>' },
+          { label: 'High', mock: '<span style="color:#dcdcdc">5h</span> <span style="color:#f85149">\u25cf\u25cf\u25cf\u25cf\u25cf\u25cb</span> <span style="color:#2e9599">92%</span>' },
+          { label: '\u226595% (zoom)', mock: '<span style="color:#dcdcdc">5h</span> <span style="color:#00a000">\u2593\u2593\u2593</span><span style="color:#666">\u2591\u2591\u2591\u2591\u2591\u2591\u2591</span> <span style="color:#00a000">3.2%</span> <span style="opacity:0.5">left</span>' },
+          { label: '99%+ (zoom)', mock: '<span style="color:#dcdcdc">5h</span> <span style="color:#f85149">\u2593</span><span style="color:#666">\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591</span> <span style="color:#f85149">0.4%</span> <span style="opacity:0.5">left</span>' },
+          { label: 'No data', mock: '<span style="color:#dcdcdc">5h</span> <span style="opacity:0.5">\u2014</span>' },
+        ]}},
+    { type: 'rate-weekly',    label: 'Weekly Rate', color: '#dcdcdc', mock: '<span style="color:#dcdcdc">7d</span> <span style="color:#e6c800">\u25cf\u25cf\u25cf\u25cf\u25cb\u25cb</span> <span style="color:#2e9599">67%</span>',  desc: 'Weekly rate limit usage with progress bar (window auto-adapts to your plan)',
+      config: [{ field: 'barStyle', type: 'select', options: ['dot', 'block'], default: 'dot', desc: 'Bar character style: dot (●○) or block (▓░)' }, { field: 'showReset', type: 'checkbox', default: false, desc: 'Show reset date/time (e.g. @mar 10, 3:00am)' }],
+      details: { how: 'Same as Session Rate but for the weekly rolling window. Includes reset date/time. The window label auto-adapts to your plan.', refresh: 'API cached 60s', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'API endpoint', value: 'api.anthropic.com/api/oauth/usage (same call as Session Rate)' },
+          { label: 'No data', value: 'Shows dim "7d \u2014"' },
+        ],
+        scenarios: [
+          { label: 'Midweek', mock: '<span style="color:#dcdcdc">7d</span> <span style="color:#e6c800">\u25cf\u25cf\u25cf\u25cf\u25cb\u25cb</span> <span style="color:#2e9599">67%</span> <span style="opacity:0.5">@mar 10</span>' },
+          { label: '\u226595% (zoom)', mock: '<span style="color:#dcdcdc">7d</span> <span style="color:#e6c800">\u2593\u2593</span><span style="color:#666">\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591</span> <span style="color:#e6c800">2.0%</span> <span style="opacity:0.5">left @mar 6, 3:00am</span>' },
+          { label: '100% (zoom)', mock: '<span style="color:#dcdcdc">7d</span> <span style="color:#666">\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591</span> <span style="color:#f85149">0.0%</span> <span style="opacity:0.5">left @mar 6, 3:00am</span>' },
+          { label: 'No data', mock: '<span style="color:#dcdcdc">7d</span> <span style="opacity:0.5">\u2014</span>' },
+        ]}},
+    { type: 'rate-extra', label: 'Extra',      color: '#dcdcdc', mock: '<span style="color:#dcdcdc">extra</span> <span style="color:#00a000">\u25cf\u25cb\u25cb\u25cb\u25cb\u25cb</span> <span style="color:#2e9599">$8/$50</span>',         desc: 'Extra usage credits spent vs limit',
+      config: [{ field: 'barStyle', type: 'select', options: ['dot', 'block'], default: 'dot', desc: 'Bar character style: dot (●○) or block (▓░)' }],
+      details: { how: 'Shows extra usage credits consumed vs monthly limit. Only visible when extra usage is enabled on your account.', refresh: 'API cached 60s', requires: 'OAuth + extra usage enabled',
+        internals: [
+          { label: 'API endpoint', value: 'api.anthropic.com/api/oauth/usage (same call)' },
+          { label: 'Visibility', value: 'Only shows when extra_usage.is_enabled = true' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="color:#dcdcdc">extra</span> <span style="color:#00a000">\u25cf\u25cf\u25cb\u25cb\u25cb\u25cb</span> <span style="color:#2e9599">$8/$50</span>' },
+        ]}},
+    { type: 'rate-opus',  label: 'Opus Rate',   color: '#dcdcdc', mock: '<span style="color:#dcdcdc">opus</span> <span style="color:#e6c800">\u25cf\u25cf\u25cf\u25cf\u25cb\u25cb</span> <span style="color:#2e9599">67%</span>', desc: 'Opus tier rate limit usage with progress bar',
+      config: [{ field: 'barStyle', type: 'select', options: ['dot', 'block'], default: 'dot', desc: 'Bar character style: dot (●○) or block (▓░)' }, { field: 'showReset', type: 'checkbox', default: false, desc: 'Show reset date/time' }],
+      details: { how: 'Shows your Opus-tier rate limit usage from the Anthropic API. Only renders when Opus utilization data is present (non-zero).', refresh: 'API cached 60s', requires: 'OAuth (API access) + Opus plan',
+        internals: [
+          { label: 'API endpoint', value: 'api.anthropic.com/api/oauth/usage (same call)' },
+          { label: 'Field', value: 'seven_day_opus.utilization' },
+          { label: 'Visibility', value: 'Only shows when seven_day_opus data is present and non-zero' },
+        ],
+        scenarios: [
+          { label: 'Low', mock: '<span style="color:#dcdcdc">opus</span> <span style="color:#00a000">\u25cf\u25cf\u25cb\u25cb\u25cb\u25cb</span> <span style="color:#2e9599">28%</span>' },
+          { label: 'High', mock: '<span style="color:#dcdcdc">opus</span> <span style="color:#f85149">\u25cf\u25cf\u25cf\u25cf\u25cf\u25cb</span> <span style="color:#2e9599">92%</span>' },
+          { label: '\u226595% (zoom)', mock: '<span style="color:#dcdcdc">opus</span> <span style="color:#00a000">\u2593\u2593\u2593</span><span style="color:#666">\u2591\u2591\u2591\u2591\u2591\u2591\u2591</span> <span style="color:#00a000">3.2%</span> <span style="opacity:0.5">left</span>' },
+        ]}},
+    { type: 'eta-session',     label: 'Session ETA',     color: '#39d2c0', mock: '5h ~2h 15m',       desc: 'Time until session limit full (window average rate, label auto-adapts)',
+      details: { how: 'Estimates time until the session limit hits 100% based on the window-average consumption rate. The window label (e.g. 5h, 3h) auto-adapts to your plan.', refresh: 'API cached 60s', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'Method', value: 'Window average: utilization / time since window start' },
+          { label: 'Data source', value: 'Rate limit API (same call as rate-session)' },
+          { label: 'Min warmup', value: '60s after window starts' },
+          { label: 'No data', value: 'Shows dim "5h \u2014"' },
+        ],
+        scenarios: [
+          { label: 'Plenty', mock: '<span style="color:#39d2c0">5h ~3h 45m</span>' },
+          { label: 'Tight', mock: '<span style="color:#39d2c0">5h ~22m</span>' },
+        ]}},
+    { type: 'eta-session-min', label: 'Session ETA/min', color: '#39d2c0', mock: '5h/min ~50m',      desc: 'Time until session limit full (short-term ~5min rate)',
+      details: { how: 'ETA based on short-term (~5 min) burn rate. Reacts faster to spikes than the window average. Label auto-adapts to your plan.', refresh: 'API cached 60s', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'Data source', value: 'Rate limit API (same call as rate-session)' },
+          { label: 'Method', value: 'Short-term: rate from rolling ~5 min reference point' },
+          { label: 'Reference file', value: 'statusline-eta-short.dat' },
+          { label: 'Min warmup', value: '120s (2 min) before first reading' },
+          { label: 'Ref update', value: 'Every 300s or if utilization drops >5%' },
+          { label: 'No data', value: 'Shows dim "5h/min \u2014"' },
+        ],
+        scenarios: [
+          { label: 'Spiking', mock: '<span style="color:#39d2c0">5h/min ~12m</span>' },
+          { label: 'Idle', mock: '<span style="color:#39d2c0">5h/min ~4h 30m</span>' },
+        ]}},
+    { type: 'eta-session-hr',  label: 'Session ETA/hr',  color: '#39d2c0', mock: '5h/hr ~2h 15m',   desc: 'Time until session limit full (long-term ~60min rate)',
+      details: { how: 'ETA based on long-term (~60 min) burn rate. Smooths out short spikes for a steadier estimate. Label auto-adapts to your plan.', refresh: 'API cached 60s', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'Data source', value: 'Rate limit API (same call as rate-session)' },
+          { label: 'Method', value: 'Long-term: rate from rolling ~60 min reference point' },
+          { label: 'Reference file', value: 'statusline-eta-long.dat' },
+          { label: 'Min warmup', value: '600s (10 min) before first reading' },
+          { label: 'Ref update', value: 'Every 3600s or if utilization drops >5%' },
+          { label: 'No data', value: 'Shows dim "5h/hr \u2014"' },
+        ],
+        scenarios: [
+          { label: 'Steady', mock: '<span style="color:#39d2c0">5h/hr ~2h 15m</span>' },
+        ]}},
+    { type: 'eta-weekly',     label: 'Weekly ETA',     color: '#39d2c0', mock: '7d ~3d 4h',        desc: 'Time until weekly limit full (window average rate, label auto-adapts)',
+      details: { how: 'Estimates time until the weekly limit hits 100% based on the window-average rate. The window label auto-adapts to your plan.', refresh: 'API cached 60s', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'Data source', value: 'Rate limit API (same call as rate-weekly)' },
+          { label: 'Method', value: 'Window average (same as Session ETA but for weekly window)' },
+          { label: 'No data', value: 'Shows dim "7d \u2014"' },
+        ],
+        scenarios: [
+          { label: 'Safe', mock: '<span style="color:#39d2c0">7d ~5d 12h</span>' },
+          { label: 'Burning', mock: '<span style="color:#39d2c0">7d ~18h</span>' },
+        ]}},
+    { type: 'eta-weekly-min', label: 'Weekly ETA/min', color: '#39d2c0', mock: '7d/min ~1d 2h',    desc: 'Time until weekly limit full (short-term ~5min rate)',
+      details: { how: 'ETA to weekly limit based on short-term burn rate. Label auto-adapts to your plan.', refresh: 'API cached 60s', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'Data source', value: 'Rate limit API (same call as rate-weekly)' },
+          { label: 'Method', value: 'Short-term ~5 min rate (same as Session ETA/min)' },
+          { label: 'No data', value: 'Shows dim "7d/min \u2014"' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="color:#39d2c0">7d/min ~1d 2h</span>' },
+        ]}},
+    { type: 'eta-weekly-hr',  label: 'Weekly ETA/hr',  color: '#39d2c0', mock: '7d/hr ~3d 4h',    desc: 'Time until weekly limit full (long-term ~60min rate)',
+      details: { how: 'ETA to weekly limit based on long-term burn rate. Label auto-adapts to your plan.', refresh: 'API cached 60s', requires: 'OAuth (API access)',
+        internals: [
+          { label: 'Data source', value: 'Rate limit API (same call as rate-weekly)' },
+          { label: 'Method', value: 'Long-term ~60 min rate (same as Session ETA/hr)' },
+          { label: 'No data', value: 'Shows dim "7d/hr \u2014"' },
+        ],
+        scenarios: [
+          { label: 'Steady', mock: '<span style="color:#39d2c0">7d/hr ~3d 4h</span>' },
+        ]}},
+    { type: 'session-cost',     label: 'Session Cost',    color: '#00a000', mock: '$0.42',              desc: 'Real session cost from Claude Code',
+      details: { how: 'Reads <code>cost.total_cost_usd</code> from Claude Code stdin JSON. Color: green <$1, amber <$5, red \u2265$5.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: cost.total_cost_usd' },
+        ],
+        scenarios: [
+          { label: 'Low', mock: '<span style="color:#00a000">$0.08</span>' },
+          { label: 'Medium', mock: '<span style="color:#e6c800">$2.45</span>' },
+          { label: 'High', mock: '<span style="color:#f85149">$12.30</span>' },
+        ]}},
+    { type: 'session-duration', label: 'Duration',        color: '#dcdcdc', mock: '1h 23m',            desc: 'Wall-clock session time',
+      details: { how: 'Converts <code>cost.total_duration_ms</code> to human-readable time. Only shows after \u22651 minute.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: cost.total_duration_ms' },
+          { label: 'Min display', value: '\u22651 minute elapsed' },
+        ],
+        scenarios: [
+          { label: 'Short', mock: '5m' },
+          { label: 'Long', mock: '2h 15m' },
+        ]}},
+    { type: 'api-wait',        label: 'API Wait',        color: '#dcdcdc', mock: 'API 42%',            desc: 'Percentage of session time waiting for API',
+      details: { how: 'Computes <code>total_api_duration_ms / total_duration_ms \u00d7 100</code>. Only shows after \u226560s session duration. Dim if <30%, amber if >70%.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: cost.total_api_duration_ms / cost.total_duration_ms' },
+          { label: 'Min display', value: '\u226560s session duration' },
+        ],
+        scenarios: [
+          { label: 'Low', mock: '<span style="opacity:0.5">API 18%</span>' },
+          { label: 'Normal', mock: 'API 42%' },
+          { label: 'High', mock: '<span style="color:#e6c800">API 78%</span>' },
+        ]}},
+    { type: 'total-tokens',    label: 'Total Tokens',    color: '#dcdcdc', mock: '45k\u2191 12k\u2193',  desc: 'Cumulative I/O tokens across compactions',
+      details: { how: 'Reads <code>context_window.total_input_tokens</code> and <code>total_output_tokens</code>. Shows \u2191/\u2193 for input/output.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: context_window.total_input_tokens / total_output_tokens' },
+        ],
+        scenarios: [
+          { label: 'Light', mock: '8k\u2191 2k\u2193' },
+          { label: 'Heavy', mock: '1.2m\u2191 450k\u2193' },
+        ]}},
+    { type: 'cache-hit',       label: 'Cache Hit',       color: '#dcdcdc', mock: 'cache 78%',          desc: 'Percentage of input tokens served from cache',
+      details: { how: 'Computes <code>cache_read / (input_tokens + cache_creation + cache_read) \u00d7 100</code>. Only shows when denominator > 0.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: cache_read_input_tokens / (input + cache_creation + cache_read)' },
+        ],
+        scenarios: [
+          { label: 'Good', mock: 'cache 85%' },
+          { label: 'Low', mock: 'cache 12%' },
+        ]}},
+    { type: 'vim-mode',        label: 'Vim Mode',        color: '#00a000', mock: 'NORMAL',             desc: 'Vim mode indicator — only when vim mode is active',
+      details: { how: 'Reads <code>vim.mode</code> from stdin JSON. Green for NORMAL, amber for INSERT. Hidden when vim mode is not active.', refresh: 'Every render', requires: 'Vim mode enabled',
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: vim.mode' },
+        ],
+        scenarios: [
+          { label: 'Normal', mock: '<span style="color:#00a000">NORMAL</span>' },
+          { label: 'Insert', mock: '<span style="color:#e6c800">INSERT</span>' },
+          { label: 'Inactive', mock: '<span style="opacity:0.4">(hidden)</span>' },
+        ]}},
+    { type: 'agent',           label: 'Agent',           color: '#39d2c0', mock: '<span style="opacity:0.5">agent:</span>security-reviewer', desc: 'Agent name — only when running an agent',
+      details: { how: 'Reads <code>agent.name</code>. Shows dim "agent:" prefix then name in color. Hidden when no agent is running.', refresh: 'Every render', requires: 'Agent active',
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: agent.name' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="opacity:0.5">agent:</span><span style="color:#39d2c0">security-reviewer</span>' },
+          { label: 'Inactive', mock: '<span style="opacity:0.4">(hidden)</span>' },
+        ]}},
+    { type: '200k-warn',       label: '200k Warn',       color: '#ff5555', mock: '\u26a0 >200k',       desc: 'Warning when response exceeds 200k tokens',
+      details: { how: 'Reads <code>exceeds_200k_tokens</code> from stdin JSON. Shows red warning. Hidden when false.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: exceeds_200k_tokens' },
+        ],
+        scenarios: [
+          { label: 'Triggered', mock: '<span style="color:#f85149">\u26a0 >200k</span>' },
+          { label: 'Normal', mock: '<span style="opacity:0.4">(hidden)</span>' },
+        ]}},
+    { type: 'cc-version',      label: 'CC Version',      color: '#888888', mock: '<span style="opacity:0.5">v</span>1.0.80', desc: 'Claude Code version number from stdin',
+      details: { how: 'Reads <code>version</code> from stdin JSON. Shows dim "v" prefix + version string.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: version' },
+        ],
+        scenarios: [
+          { label: 'Current', mock: '<span style="opacity:0.5">v</span>1.0.80' },
+        ]}},
+    { type: 'model-id',        label: 'Model ID',        color: '#888888', mock: 'claude-opus-4-6',    desc: 'Full model identifier string',
+      details: { how: 'Reads <code>model.id</code> from stdin JSON. Shows the full model ID for users who want the exact identifier.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: model.id' },
+        ],
+        scenarios: [
+          { label: 'Opus', mock: 'claude-opus-4-6' },
+          { label: 'Sonnet', mock: 'claude-sonnet-4-6' },
+          { label: 'Haiku', mock: 'claude-haiku-4-5-20251001' },
+        ]}},
+  ]},
+  { name: 'GitHub', types: [
+    { type: 'gh-pr',          label: 'PR Status',    color: '#00a000', mock: 'PR #42 open',           desc: 'Current branch PR number and state',
+      details: { how: 'Runs <code>gh pr view</code> for the current branch. Shows PR number and state (open/merged/closed).', refresh: 'Cached 60s', requires: 'gh CLI + GitHub repo',
+        internals: [
+          { label: 'CLI command', value: 'gh pr view --json number,state,isDraft,...' },
+          { label: 'Auth', value: 'gh CLI auth (gh auth login \u2014 OAuth or PAT)' },
+          { label: 'Cache TTL', value: '60s' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'Stale threshold', value: '5 min (shows dim "stale" warning)' },
+          { label: 'Error handling', value: 'Invalid responses not cached; falls back to last valid cache' },
+          { label: 'No PR', value: 'Shows dim "no PR"' },
+        ],
+        scenarios: [
+          { label: 'Open', mock: '<span style="color:#00a000">PR #42 open</span>' },
+          { label: 'Merged', mock: '<span style="color:#7c3aed">PR #42 merged</span>' },
+          { label: 'No PR', mock: '<span style="color:#888">no PR</span>' },
+        ]}},
+    { type: 'gh-checks',      label: 'CI Checks',    color: '#e6c800', mock: 'CI pass',               desc: 'PR CI check status (pass/fail/pending)',
+      details: { how: 'Queries PR check suite status via <code>gh</code>. Shows pass/fail/pending.', refresh: 'Cached 60s', requires: 'gh CLI + PR exists',
+        internals: [
+          { label: 'Data source', value: 'Same gh pr view call as PR Status (no extra API call)' },
+          { label: 'No data', value: 'Shows dim "CI \u2014" when PR exists but no checks' },
+        ],
+        scenarios: [
+          { label: 'Pass', mock: '<span style="color:#00a000">CI pass</span>' },
+          { label: 'Fail', mock: '<span style="color:#f85149">CI fail</span>' },
+          { label: 'Running', mock: '<span style="color:#e6c800">CI pending</span>' },
+        ]}},
+    { type: 'gh-reviews',     label: 'Reviews',      color: '#00a000', mock: 'approved',              desc: 'PR review decision and progress',
+      details: { how: 'Shows the PR review state: approved, changes requested, or review count.', refresh: 'Cached 60s', requires: 'gh CLI + PR exists',
+        internals: [
+          { label: 'Data source', value: 'Shared PR cache (gh pr view --json reviewDecision,reviews,reviewRequests)' },
+          { label: 'Cache TTL', value: '60s (shared with gh-pr, gh-checks, gh-pr-comments)' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'Auth', value: 'gh CLI OAuth (browser login)' },
+        ],
+        scenarios: [
+          { label: 'Approved', mock: '<span style="color:#00a000">approved</span>' },
+          { label: 'Changes', mock: '<span style="color:#f85149">changes requested</span>' },
+          { label: 'Pending', mock: '<span style="color:#e6c800">1/2 reviews</span>' },
+        ]}},
+    { type: 'gh-pr-comments', label: 'PR Comments',  color: '#dcdcdc', mock: '5 comments',            desc: 'Number of comments on the current PR',
+      details: { how: 'Counts comments on the current branch\'s PR.', refresh: 'Cached 60s', requires: 'gh CLI + PR exists',
+        internals: [
+          { label: 'Data source', value: 'Shared PR cache (gh pr view --json comments)' },
+          { label: 'Cache TTL', value: '60s (shared with gh-pr, gh-checks, gh-reviews)' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'Auth', value: 'gh CLI OAuth (browser login)' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="color:#dcdcdc">12 comments</span>' },
+          { label: 'Quiet', mock: '<span style="color:#dcdcdc">0 comments</span>' },
+        ]}},
+    { type: 'gh-actions',     label: 'Actions',      color: '#e6c800', mock: 'CI success 2h',         desc: 'Latest workflow run name, status, and age',
+      details: { how: 'Shows the most recent GitHub Actions workflow run for the repo: name, conclusion, and how long ago.', refresh: 'Cached 60s', requires: 'gh CLI + GitHub repo',
+        internals: [
+          { label: 'CLI command', value: 'gh run list --branch {branch} --limit 1 --json ...' },
+          { label: 'Cache TTL', value: '60s' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'No data', value: 'Shows dim "actions \u2014"' },
+        ],
+        scenarios: [
+          { label: 'Success', mock: '<span style="color:#00a000">CI success 2h</span>' },
+          { label: 'Failed', mock: '<span style="color:#f85149">deploy failure 15m</span>' },
+        ]}},
+    { type: 'gh-notifs',      label: 'Notifications',color: '#dcdcdc', mock: '3 notifs',              desc: 'Unread GitHub notification count',
+      details: { how: 'Counts unread GitHub notifications via <code>gh api notifications</code>.', refresh: 'Cached 120s', requires: 'gh CLI + authenticated',
+        internals: [
+          { label: 'API endpoint', value: 'gh api notifications --jq \'length\'' },
+          { label: 'Cache TTL', value: '120s' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'Auth', value: 'gh CLI OAuth (browser login)' },
+        ],
+        scenarios: [
+          { label: 'Unread', mock: '<span style="color:#dcdcdc">7 notifs</span>' },
+          { label: 'Clear', mock: '<span style="color:#888">0 notifs</span>' },
+        ]}},
+    { type: 'gh-issues',      label: 'Issues',       color: '#dcdcdc', mock: 'issues: 12',            desc: 'Open issue count for the repo',
+      details: { how: 'Counts open issues for the current repo.', refresh: 'Cached 300s', requires: 'gh CLI + GitHub repo',
+        internals: [
+          { label: 'CLI command', value: 'gh issue list --state open --limit 999 --json number --jq \'length\'' },
+          { label: 'Cache TTL', value: '300s (5 min)' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'Auth', value: 'gh CLI OAuth (browser login)' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="color:#dcdcdc">issues: 23</span>' },
+        ]}},
+    { type: 'gh-pr-count',    label: 'PR Count',     color: '#dcdcdc', mock: 'PRs: 5',                desc: 'Open PR count for the repo',
+      details: { how: 'Counts open pull requests for the current repo.', refresh: 'Cached 300s', requires: 'gh CLI + GitHub repo',
+        internals: [
+          { label: 'CLI command', value: 'gh pr list --state open --limit 999 --json number --jq \'length\'' },
+          { label: 'Cache TTL', value: '300s (5 min)' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'Auth', value: 'gh CLI OAuth (browser login)' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="color:#dcdcdc">PRs: 8</span>' },
+        ]}},
+    { type: 'gh-stars',       label: 'Stars',        color: '#e6c800', mock: '\u2605 1.2k',            desc: 'Repository star count',
+      details: { how: 'Fetches the star count for the current repo.', refresh: 'Cached 300s', requires: 'gh CLI + GitHub repo',
+        internals: [
+          { label: 'CLI command', value: 'gh repo view --json stargazerCount --jq \'.stargazerCount\'' },
+          { label: 'Cache TTL', value: '300s (5 min)' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'Auth', value: 'gh CLI OAuth (browser login)' },
+        ],
+        scenarios: [
+          { label: 'Popular', mock: '<span style="color:#e6c800">\u2605 4.8k</span>' },
+          { label: 'New', mock: '<span style="color:#e6c800">\u2605 12</span>' },
+        ]}},
+  ]},
+  { name: 'Docker', types: [
+    { type: 'docker',    label: 'Docker Status', color: '#39d2c0', mock: '3/3 up',     desc: 'Container summary — running count and health',
+      details: { how: 'Reads <code>docker compose ps</code> for the project directory. Only activates when a compose file exists.', refresh: 'Cached 30s', requires: 'Docker CLI + compose file in project',
+        internals: [
+          { label: 'CLI command', value: 'docker compose -f {compose_file} ps --format json' },
+          { label: 'Cache TTL', value: '30s' },
+          { label: 'Timeout', value: '5s' },
+          { label: 'Detection', value: 'Scans for docker-compose.yml, docker-compose.yaml, compose.yml, compose.yaml' },
+        ],
+        scenarios: [
+          { label: 'All up', mock: '<span style="color:#00a000">3/3 up</span>' },
+          { label: 'Partial', mock: '<span style="color:#e6c800">2/3 up</span>' },
+          { label: 'Unhealthy', mock: '<span style="color:#f85149">1 unhealthy</span>' },
+          { label: 'None', mock: '<span style="color:#888">no containers</span>' },
+        ]}},
+    { type: 'docker-db', label: 'Docker DB',     color: '#39d2c0', mock: 'pg: up',     desc: 'Database container status — auto-detects postgres, mysql, redis, mongo',
+      details: { how: 'Finds DB containers by image name (postgres, mysql, redis, mongo, memcached) or service name (db, database). Shares cache with Docker Status.', refresh: 'Cached 30s', requires: 'Docker CLI + compose file + DB container',
+        internals: [
+          { label: 'Data source', value: 'Shared cache with Docker Status (no extra docker call)' },
+          { label: 'Detection', value: 'Image regex: postgres|mysql|mariadb|redis|mongo|memcached; Service regex adds: db|database' },
+          { label: 'Name shortening', value: 'postgres\u2192pg, mysql/mariadb\u2192mysql, etc.' },
+        ],
+        scenarios: [
+          { label: 'Running', mock: '<span style="color:#00a000">pg: up</span>' },
+          { label: 'Down', mock: '<span style="color:#f85149">pg: down</span>' },
+          { label: 'Unhealthy', mock: '<span style="color:#f85149">pg: unhealthy</span>' },
+          { label: 'Restarting', mock: '<span style="color:#e6c800">redis: restarting</span>' },
+        ]}},
+  ]},
+  { name: 'Git', types: [
+    { type: 'branch',     label: 'Branch',     color: '#00a000', mock: 'main',              desc: 'Current git branch',
+      details: { how: 'Runs <code>git rev-parse --abbrev-ref HEAD</code> in the working directory.', refresh: 'Every render (~10s)', requires: 'Git repo',
+        internals: [
+          { label: 'Data source', value: 'git rev-parse --abbrev-ref HEAD' },
+        ],
+        scenarios: [
+          { label: 'Main', mock: '<span style="color:#00a000">main</span>' },
+          { label: 'Feature', mock: '<span style="color:#00a000">feat/sparklines</span>' },
+        ]}},
+    { type: 'dir-branch', label: 'Dir@Branch', color: '#2e9599', mock: '.claude@main (+5 -2)', desc: 'Directory, git branch, and diff stats',
+      details: { how: 'Combines directory name, git branch, and <code>git diff --shortstat</code> into one segment.', refresh: 'Every render (~10s)', requires: 'Git repo',
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON cwd + git rev-parse + git diff --numstat' },
+        ],
+        scenarios: [
+          { label: 'Clean', mock: '<span style="color:#2e9599">my-app</span><span style="color:#666">@</span><span style="color:#00a000">main</span>' },
+          { label: 'Changes', mock: '<span style="color:#2e9599">my-app</span><span style="color:#666">@</span><span style="color:#00a000">feat</span> <span style="color:#3fb950">+12</span> <span style="color:#f85149">-3</span>' },
+        ]}},
+    { type: 'diff-stats', label: 'Diff Stats', color: '#00a000', mock: '+12 -3',            desc: 'Standalone git diff additions/deletions',
+      details: { how: 'Runs <code>git diff --shortstat</code> and parses insertions/deletions.', refresh: 'Every render (~10s)', requires: 'Git repo',
+        internals: [
+          { label: 'Data source', value: 'git diff --numstat (summed additions/deletions)' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="color:#3fb950">+42</span> <span style="color:#f85149">-7</span>' },
+          { label: 'Clean', mock: '<span style="color:#666">no changes</span>' },
+        ]}},
+    { type: 'worktree',        label: 'Worktree',        color: '#39d2c0', mock: 'my-feature<span style="opacity:0.5">@</span>worktree-branch', desc: 'Worktree name + branch — only in worktree sessions',
+      details: { how: 'Reads <code>worktree.name</code> and <code>worktree.branch</code>. Shows name@branch with dim @. Hidden when not in a worktree.', refresh: 'Every render', requires: 'Worktree session',
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: worktree.name / worktree.branch' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="color:#39d2c0">my-feature</span><span style="opacity:0.5">@</span><span style="color:#39d2c0">worktree-my-feature</span>' },
+          { label: 'Inactive', mock: '<span style="opacity:0.4">(hidden)</span>' },
+        ]}},
+    { type: 'lines-changed',   label: 'Lines Changed',   color: '#dcdcdc', mock: '<span style="color:#3fb950">+156</span> <span style="color:#f85149">-23</span>', desc: 'Lines added/removed this session',
+      details: { how: 'Reads <code>cost.total_lines_added</code> and <code>cost.total_lines_removed</code>. Green for adds, red for removes. Hidden when no changes.', refresh: 'Every render', requires: null,
+        internals: [
+          { label: 'Data source', value: 'Stdin JSON: cost.total_lines_added / cost.total_lines_removed' },
+        ],
+        scenarios: [
+          { label: 'Active', mock: '<span style="color:#3fb950">+42</span> <span style="color:#f85149">-7</span>' },
+          { label: 'Adds only', mock: '<span style="color:#3fb950">+156</span>' },
+          { label: 'No changes', mock: '<span style="opacity:0.4">(hidden)</span>' },
+        ]}},
+  ]},
+];
+
+// ── Build sections from _sectionDefs ────────────────────────────────────────
+PALETTE_GROUPS.forEach(g => {
+  if (!g._sectionDefs) return;
+  const typeMap = Object.fromEntries(g.types.map(t => [t.type, t]));
+  g.sections = g._sectionDefs.map(sd => ({
+    name: sd.name,
+    types: sd.typeNames.map(n => typeMap[n]).filter(Boolean),
+  }));
+  delete g._sectionDefs;
+});
+
+// ── Custom (user-defined) segments ──────────────────────────────────────────
+// Loaded from segments/custom/manifest.json, displayed with USR badge
+
+let _customSegmentsLoaded = false;
+
+function loadCustomManifest() {
+  // Try to fetch the manifest (works when builder is served or opened locally alongside segments/)
+  fetch('segments/custom/manifest.json')
+    .then(r => r.ok ? r.json() : [])
+    .then(customs => {
+      if (!customs.length) return;
+      applyCustomSegments(customs);
+      _customSegmentsLoaded = true;
+      renderPalette();
+    })
+    .catch(() => {}); // silent fail — no manifest = no custom segments
+}
+
+function applyCustomSegments(customs) {
+  const entries = customs.map(s => ({
+    ...s,
+    custom: true,
+    details: {
+      how: s.details?.how || 'User-defined custom segment.',
+      refresh: s.details?.refresh || 'Depends on implementation',
+      requires: s.details?.requires || null,
+      scenarios: s.details?.scenarios || [],
+    },
+  }));
+
+  // Find or create the Custom group
+  let customGroup = PALETTE_GROUPS.find(g => g.name === 'Custom');
+  if (entries.length > 0) {
+    if (!customGroup) {
+      customGroup = { name: 'Custom', types: [] };
+      PALETTE_GROUPS.push(customGroup);
+    }
+    customGroup.types = entries;
+  }
+
+  // Rebuild flat lookup
+  SEGMENT_TYPES.length = 0;
+  PALETTE_GROUPS.forEach(g => g.types.forEach(t => SEGMENT_TYPES.push(t)));
+}
+
+// Flat list for lookups
+const SEGMENT_TYPES = PALETTE_GROUPS.flatMap(g => g.types);
+
+
+// ── Default Messages ────────────────────────────────────────────────────────
+const DEFAULT_MESSAGES = [
+  "I'm not hallucinating, you're wrong",
+  "Context window: the new RAM",
+  "Tokens in, vibes out",
+  "Your prompt could be clearer",
+  "I read the docs, you should too",
+  "Not a bug, I'm just creative",
+  "Trust me, I've read the internet",
+  "Autocomplete with opinions",
+  "Faster than your last hire",
+  "I don't sleep, I just context shift",
+  "No coffee needed, just tokens",
+  "Pair programming, minus the small talk",
+  "You could have Googled that",
+  "Bold prompt, let's see what happens",
+  "Hallucination? I call it jazz",
+  "I suggested tests, you skipped them",
+  "Prompt unclear, shipping anyway",
+  "I've seen your git history",
+  "Ask me nicely next time",
+  "Am I the tool or the toolmaker?"
+];
+
+// ── Config Presets — pre-made segment/line collections ──────────────────────
+const CONFIG_PRESETS = {
+  'basic': {
+    name: 'Basic',
+    desc: 'The daily driver — model, context, and rate limits',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'model' }, { type: 'dir-branch' }, { type: 'tokens' },
+        { type: 'rate-session' }, { type: 'rate-weekly' }
+      ]}
+    ]
+  },
+  'builder': {
+    name: 'Builder',
+    nerdFont: true,
+    desc: 'Rate limits, git, context, burn rate, and product identity',
+    lines: [
+      { separatorStyle: { dim: true }, segments: [
+        { type: 'rate-session', showReset: false }, { type: 'eta-session' },
+        { type: 'sep' }, { type: 'rate-weekly' },
+        { type: 'sep' }, { type: 'effort' },
+        { type: 'sep' }, { type: 'text', content: 'CC' }, { type: 'cc-version' }
+      ]},
+      { separatorStyle: { dim: true }, segments: [
+        { type: 'dir-branch' }, { type: 'sep' }, { type: 'diff-stats' },
+        { type: 'sep' }, { type: 'tokens' },
+        { type: 'sep' }, { type: 'text', content: 'Context' }, { type: 'pct-used' }
+      ]},
+      { segments: [
+        { type: 'burn-min' }, { type: 'burn-hr' },
+        { type: 'compact-warn' }, { type: 'docker' }
+      ]},
+      { backgroundStyle: 'gradient', background: '#1a1a4a', segments: [
+        { type: 'icon', content: '\u{1F680}' },
+        { type: 'label', content: 'oh-my-line' }, { type: 'tagline', content: 'Built with Claude Code' }, { type: 'message', messages: DEFAULT_MESSAGES, interval: 5 }
+      ]}
+    ]
+  },
+  'context-manager': {
+    name: 'Context Manager',
+    desc: 'Monitor token burn and compaction for long sessions',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'model' }, { type: 'tokens' }, { type: 'pct-used' },
+        { type: 'pct-remain' }, { type: 'compact-warn' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'burn-min' }, { type: 'burn-hr' },
+        { type: 'ctx-spark' }, { type: 'ctx-target' }
+      ]}
+    ]
+  },
+  'rate-tracker': {
+    name: 'Rate Tracker',
+    desc: 'Track usage limits, trends, and time remaining',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'model' }, { type: 'dir-branch' }, { type: 'tokens' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'rate-session' }, { type: 'rate-weekly' }, { type: 'rate-extra' },
+        { type: 'rate-spark' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'eta-session' }, { type: 'eta-weekly' }, { type: 'rate-target' }
+      ]}
+    ]
+  },
+  'cost-watcher': {
+    name: 'Cost Watcher',
+    desc: 'API spend tracking with burn rate and limits',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'model' }, { type: 'tokens' },
+        { type: 'cost' }, { type: 'cost-hr' }, { type: 'cost-7d' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'rate-session' }, { type: 'rate-weekly' }, { type: 'burn-min' },
+        { type: 'cost-spark' }
+      ]}
+    ]
+  },
+  'github-pr': {
+    name: 'GitHub PR',
+    desc: 'PR workflow — checks, reviews, and comments',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'model' }, { type: 'dir-branch' }, { type: 'diff-stats' }, { type: 'tokens' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'gh-pr' }, { type: 'gh-checks' }, { type: 'gh-reviews' },
+        { type: 'gh-actions' }, { type: 'gh-pr-comments' }
+      ]}
+    ]
+  },
+  'open-source': {
+    name: 'Open Source',
+    desc: 'Repo health — issues, PRs, stars, and CI',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'model' }, { type: 'branch' }, { type: 'diff-stats' }, { type: 'tokens' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'gh-issues' }, { type: 'gh-pr-count' }, { type: 'gh-stars' },
+        { type: 'gh-checks' }, { type: 'gh-notifs' }
+      ]}
+    ]
+  },
+  'full-stack': {
+    name: 'Full Stack',
+    desc: 'Docker services, git, and rate limits',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'model' }, { type: 'dir-branch' }, { type: 'tokens' },
+        { type: 'docker' }, { type: 'docker-db' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'rate-session' }, { type: 'rate-weekly' }, { type: 'cost' }
+      ]}
+    ]
+  },
+  'branded': {
+    name: 'Branded',
+    desc: 'Product identity with rotating messages',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'model' }, { type: 'dir-branch' }, { type: 'tokens' },
+        { type: 'rate-session' }
+      ]},
+      { backgroundStyle: 'gradient', background: '#1a1a4a', segments: [
+        { type: 'icon', content: '\u{1F916}' }, { type: 'label', content: 'oh-my-line' }, { type: 'tagline', content: 'Built with Claude Code' }, { type: 'message', messages: DEFAULT_MESSAGES, interval: 5 }
+      ]}
+    ]
+  },
+  insane: {
+    name: 'Insane',
+    desc: 'Every segment type, compact — the full catalogue with rocket art',
+    lines: [
+      { separator: ' ', segments: [
+        { type: 'text', content: '      /\\      ', style: { color: '#f85149' } },
+        { type: 'model', style: { bold: true } }, { type: 'model-id' }, { type: 'dir' }, { type: 'version' }, { type: 'cc-version' }, { type: 'effort' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '     /  \\     ', style: { color: '#e6edf3' } },
+        { type: 'branch' }, { type: 'dir-branch' }, { type: 'diff-stats' }, { type: 'lines-changed' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '    | CC |    ', style: { color: '#58a6ff' } },
+        { type: 'tokens' }, { type: 'total-tokens' }, { type: 'pct-used' }, { type: 'pct-remain' }, { type: 'cache-hit' }, { type: 'compact-warn' }, { type: '200k-warn' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '    |    |    ', style: { color: '#58a6ff' } },
+        { type: 'burn-min' }, { type: 'burn-hr' }, { type: 'burn-spark' },
+        { type: 'ctx-spark' }, { type: 'ctx-target' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '   /|    |\\   ', style: { color: '#8b949e' } },
+        { type: 'rate-session' }, { type: 'rate-weekly' }, { type: 'rate-extra' }, { type: 'rate-opus' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '  /_|____|_\\  ', style: { color: '#8b949e' } },
+        { type: 'rate-spark' }, { type: 'rate-target' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '    \\%\\/%/    ', style: { color: '#d29922' } },
+        { type: 'eta-session' }, { type: 'eta-session-min' }, { type: 'eta-session-hr' },
+        { type: 'eta-weekly' }, { type: 'eta-weekly-min' }, { type: 'eta-weekly-hr' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '     \\%%/     ', style: { color: '#f85149' } },
+        { type: 'cost' }, { type: 'cost-min' }, { type: 'cost-hr' },
+        { type: 'cost-7d' }, { type: 'cost-spark' },
+        { type: 'session-cost' }, { type: 'session-duration' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'custom-icon', content: '\uE726', style: { color: '#6e40c9' } },
+        { type: 'gh-pr' }, { type: 'gh-checks' }, { type: 'gh-reviews' },
+        { type: 'gh-actions' }, { type: 'gh-pr-comments' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'custom-icon', content: '\uF0F3', style: { color: '#dcdcdc' } },
+        { type: 'gh-notifs' }, { type: 'gh-issues' }, { type: 'gh-pr-count' },
+        { type: 'gh-stars' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'custom-icon', content: '\uF308', style: { color: '#0099ff' } },
+        { type: 'docker' }, { type: 'docker-db' }, { type: 'api-wait' }
+      ]},
+      { backgroundStyle: 'gradient', background: '#1a1a4a', segments: [
+        { type: 'icon' },
+        { type: 'label', content: 'oh-my-line' }, { type: 'tagline', content: 'Built with Claude Code' }, { type: 'message', messages: DEFAULT_MESSAGES, interval: 5 }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'text', content: '\u2593\u2592\u2591', style: { color: '#00cc66' } },
+        { type: 'custom-icon', content: '\u{1F525}' },
+        { type: 'text', content: 'insane mode', style: { bold: true } },
+        { type: 'sep', content: '\u2502' }, { type: 'command', content: 'date +%H:%M', cache: 10 },
+        { type: 'vim-mode' }, { type: 'agent' }, { type: 'worktree' },
+        { type: 'text', content: '\u2591\u2592\u2593', style: { color: '#00cc66' } }
+      ]}
+    ]
+  },
+  'art-diamond': {
+    name: 'Art: Diamond',
+    desc: 'Diamond frame with wave bar — bold and decorative',
+    lines: [
+      { separator: ' ', segments: [
+        { type: 'text', content: '\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557', style: { color: '#7c3aed' } },
+        { type: 'model', style: { bold: true } }, { type: 'tokens' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '\u2551  \u25C8  C\u00B7L\u00B7A\u00B7U\u00B7D\u00B7E  \u25C8 \u2551', style: { color: '#7c3aed' } },
+        { type: 'dir-branch' }, { type: 'diff-stats' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '\u2551   \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588\u2587\u2586\u2585\u2584\u2583\u2582\u2581  \u2551', style: { color: '#39d2c0' } },
+        { type: 'rate-session' }, { type: 'rate-weekly' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D', style: { color: '#7c3aed' } },
+        { type: 'cost' }, { type: 'burn-hr' }
+      ]}
+    ]
+  },
+  'art-circuit': {
+    name: 'Art: Circuit',
+    desc: 'Circuit board traces — techy minimalist',
+    lines: [
+      { separator: ' ', segments: [
+        { type: 'text', content: '\u250C\u2500\u2500\u2500\u253C\u2500\u2500\u2500\u2510', style: { color: '#39d2c0' } },
+        { type: 'model', style: { bold: true } }, { type: 'tokens' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '\u2502 \u25CF\u2500\u25CB\u2500\u25CF \u2502', style: { color: '#39d2c0' } },
+        { type: 'dir-branch' }, { type: 'diff-stats' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '\u2502 \u25CB\u2500\u25CF\u2500\u25CB \u2502', style: { color: '#39d2c0' } },
+        { type: 'rate-session' }, { type: 'rate-weekly' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '\u2514\u2500\u2500\u2500\u253C\u2500\u2500\u2500\u2518', style: { color: '#39d2c0' } },
+        { type: 'cost' }, { type: 'burn-hr' }
+      ]}
+    ]
+  },
+  'art-signal': {
+    name: 'Art: Weather',
+    desc: 'Rain cloud — atmospheric vibes',
+    lines: [
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'text', content: '     .-.  ', style: { color: '#58a6ff' } },
+        { type: 'model', style: { bold: true } }, { type: 'tokens' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'text', content: '   .(   ).', style: { color: '#58a6ff' } },
+        { type: 'dir-branch' }, { type: 'diff-stats' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'text', content: '  (___(___)', style: { color: '#58a6ff' } },
+        { type: 'rate-session' }, { type: 'rate-weekly' }
+      ]},
+      { separator: '|', separatorStyle: { dim: true }, segments: [
+        { type: 'text', content: "   ' ' ' '", style: { color: '#58a6ff', dim: true } },
+        { type: 'cost' }, { type: 'burn-hr' }
+      ]}
+    ]
+  },
+  'art-rocket': {
+    name: 'Art: Rocket',
+    desc: 'Launch sequence — vertical rocket with exhaust',
+    lines: [
+      { separator: ' ', segments: [
+        { type: 'text', content: '    /\\    ', style: { color: '#f85149' } },
+        { type: 'model', style: { bold: true } }, { type: 'tokens' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '   /  \\   ', style: { color: '#e6edf3' } },
+        { type: 'dir-branch' }, { type: 'diff-stats' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '  | CC |  ', style: { color: '#58a6ff' } },
+        { type: 'rate-session' }, { type: 'rate-weekly' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '  |    |  ', style: { color: '#58a6ff' } },
+        { type: 'cost' }, { type: 'burn-hr' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: ' /|    |\\ ', style: { color: '#8b949e' } },
+        { type: 'eta-session' }, { type: 'eta-weekly' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '/_|____|_\\', style: { color: '#8b949e' } },
+        { type: 'burn-min' }, { type: 'burn-hr' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '  \\%\\/%/  ', style: { color: '#d29922' } },
+        { type: 'pct-used' }, { type: 'pct-remain' }
+      ]},
+      { separator: ' ', segments: [
+        { type: 'text', content: '   \\%%/   ', style: { color: '#f85149' } },
+        { type: 'ctx-spark' }
+      ]}
+    ]
+  },
+};
+
+// ── State ───────────────────────────────────────────────────────────────────
+let state = {
+  nerdFont: false,
+  usageProxy: '',
+  lines: [
+    {
+      separator: '|', separatorStyle: { dim: true },
+      segments: [
+        { type: 'model' }, { type: 'dir-branch' }, { type: 'tokens' },
+        { type: 'rate-session' }, { type: 'rate-weekly' }
+      ]
+    }
+  ]
+};
+
+let selectedSeg = null; // { lineIdx, segIdx }
+let dragData = null;
+let activeTab = 0;      // palette tab index
+let activeLineTab = 0;  // line tab index
+let paletteSearchTerm = '';
+let paletteSearchActive = false;
+let _accordionOpen = { 0: true }; // first section open by default
+
+function toggleAccordion(si) {
+  _accordionOpen[si] = !_accordionOpen[si];
+  renderPalette();
+}
+
+// ── Render everything ───────────────────────────────────────────────────────
+function render() {
+  renderPresetBar();
+  renderPalette();
+  renderLines();
+  renderPreview();
+  upgradeLinePreviewWasm();
+  renderJSON();
+  renderSegEditor();
+}
+
+function renderPaletteSegItem(s) {
+  const d = s.details;
+  const isCustom = s.custom;
+  const customNote = isCustom ? `
+    <div class="detail-custom-note">
+      <b>User-defined segment.</b> Use the <code>command</code> segment type to run any shell command and display its output.
+    </div>` : '';
+  const detailHtml = d ? `
+    <div class="palette-detail">
+      <div class="detail-row"><span class="detail-label">How</span><span class="detail-value">${d.how}</span></div>
+      <div class="detail-row"><span class="detail-label">Refresh</span><span class="detail-value">${d.refresh}</span></div>
+      ${d.requires ? `<div class="detail-row"><span class="detail-label">Requires</span><span class="detail-value">${d.requires}</span></div>` : ''}
+      ${d.scenarios?.length ? `<div class="detail-scenarios">${d.scenarios.map(sc =>
+        `<div class="detail-scenario"><span class="scenario-label">${sc.label}</span><span class="scenario-mock">${sc.mock}</span></div>`
+      ).join('')}</div>` : ''}
+      ${d.internals?.length ? `<div class="detail-internals">
+        <div class="detail-internals-title">Internals</div>
+        ${d.internals.map(i => `<div class="detail-internal-row"><span class="detail-internal-label">${i.label}</span><span class="detail-internal-value">${i.value}</span></div>`).join('')}
+      </div>` : ''}
+      ${(() => {
+        const typeConfig = s.config || [];
+        const pfx = NO_PREFIX_SUFFIX.includes(s.type) ? [] : PREFIX_SUFFIX_CONFIG;
+        const allCfg = [...typeConfig, ...pfx, ...STYLE_CONFIG];
+        return `<div class="detail-config">
+          <div class="detail-config-title">Config Options</div>
+          <table><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
+          ${allCfg.map(c => `<tr><td class="cfg-field">${c.label || c.field}</td><td class="cfg-type">${c.type}</td><td class="cfg-default">${c.default || ''}</td><td class="cfg-desc">${c.desc}</td></tr>`).join('')}
+          </table></div>`;
+      })()}
+      ${customNote}
+    </div>` : '';
+  return `<div class="palette-seg-wrapper" data-type="${s.type}">
+    <div class="palette-seg" draggable="true" data-type="${s.type}">
+      <span class="seg-grip">\u283F</span>
+      ${isCustom ? '<span class="seg-custom-tag">USR</span>' : ''}
+      <span class="seg-label">${s.label}</span>
+      <span class="seg-preview" style="color:${s.color}">${s.mock}</span>
+      <span class="seg-desc">${s.desc || ''}</span>
+      ${d ? '<span class="seg-chevron">\u25BE</span>' : ''}
+    </div>${detailHtml}
+  </div>`;
+}
+
+function renderPalette() {
+  const tabsEl = document.getElementById('paletteTabs');
+  const contentEl = document.getElementById('paletteContent');
+  // Render tabs — normal group tabs + search tab
+  tabsEl.innerHTML = PALETTE_GROUPS.map((g, i) =>
+    `<div class="palette-tab ${!paletteSearchActive && i === activeTab ? 'active' : ''}" onclick="setActiveTab(${i})">${g.name}</div>`
+  ).join('') +
+  `<div class="palette-tab palette-tab-search ${paletteSearchActive ? 'active' : ''}" onclick="activateSearchTab()" title="Search segments">&#128269;</div>`;
+
+  // Determine which segments to show
+  let segments;
+  if (paletteSearchActive) {
+    if (paletteSearchTerm.length > 0) {
+      const q = paletteSearchTerm.toLowerCase();
+      segments = SEGMENT_TYPES.filter(s =>
+        s.type.toLowerCase().includes(q) ||
+        s.label.toLowerCase().includes(q) ||
+        (s.desc && s.desc.toLowerCase().includes(q)) ||
+        s.mock.replace(/<[^>]*>/g, '').toLowerCase().includes(q)
+      );
+    } else {
+      segments = SEGMENT_TYPES;
+    }
+  } else {
+    segments = PALETTE_GROUPS[activeTab]?.types || [];
+  }
+
+  const isCustomTab = !paletteSearchActive && PALETTE_GROUPS[activeTab]?.name === 'Custom';
+
+  if (segments.length === 0 && !isCustomTab) {
+    const searchInputHtml = paletteSearchActive
+      ? `<input type="text" class="palette-search-inline" id="paletteSearchInline" placeholder="Search segments..." value="${paletteSearchTerm.replace(/"/g, '&quot;')}" oninput="onPaletteSearch(this.value)">`
+      : '';
+    contentEl.innerHTML = searchInputHtml + '<div class="palette-empty">No matching segments</div>';
+    if (paletteSearchActive) {
+      const searchInput = document.getElementById('paletteSearchInline');
+      if (searchInput) { searchInput.focus(); searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length); }
+    }
+    return;
+  }
+
+  // Build segment list
+  const segListHtml = segments.map(renderPaletteSegItem).join('');
+
+  const searchInputHtml = paletteSearchActive
+    ? `<input type="text" class="palette-search-inline" id="paletteSearchInline" placeholder="Search segments..." value="${paletteSearchTerm.replace(/"/g, '&quot;')}" oninput="onPaletteSearch(this.value)">`
+    : '';
+
+  // Accordion view for groups with sections (when not searching)
+  const activeGroup = PALETTE_GROUPS[activeTab];
+  if (!paletteSearchActive && activeGroup?.sections) {
+    const accordionHtml = activeGroup.sections.map((sec, si) => {
+      const isOpen = !!_accordionOpen[si];
+      return `<div class="accordion-section${isOpen ? ' open' : ''}">
+        <div class="accordion-header" onclick="toggleAccordion(${si})">
+          <span class="accordion-arrow">\u25B6</span>
+          <span>${sec.name}</span>
+          <span class="accordion-count">${sec.types.length}</span>
+        </div>
+        <div class="accordion-body">${sec.types.map(renderPaletteSegItem).join('')}</div>
+      </div>`;
+    }).join('');
+    contentEl.innerHTML = `<div class="palette-accordion">${accordionHtml}</div>`;
+  } else {
+    contentEl.innerHTML = searchInputHtml + `<div class="palette-group">${segListHtml}</div>`;
+  }
+
+  // Auto-focus the search input when search tab is active
+  if (paletteSearchActive) {
+    const searchInput = document.getElementById('paletteSearchInline');
+    if (searchInput) {
+      searchInput.focus();
+      // Place cursor at end of existing text
+      searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+    }
+  }
+
+  // Wire drag events on the chip (not the wrapper)
+  contentEl.querySelectorAll('.palette-seg').forEach(chip => {
+    chip.addEventListener('dragstart', e => {
+      dragData = { source: 'palette', type: chip.dataset.type };
+      chip.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', '');
+      highlightZones();
+    });
+    chip.addEventListener('dragend', () => {
+      chip.classList.remove('dragging');
+      removeIndicator();
+      clearZoneHighlights();
+    });
+    // Click toggles the detail accordion (only if not dragging)
+    chip.addEventListener('click', () => {
+      const wrapper = chip.closest('.palette-seg-wrapper');
+      if (!wrapper.querySelector('.palette-detail')) return;
+      wrapper.classList.toggle('expanded');
+    });
+  });
+}
+
+function activateSearchTab() {
+  paletteSearchActive = true;
+  renderPalette();
+}
+
+function setActiveTab(idx) {
+  activeTab = idx;
+  paletteSearchActive = false;
+  paletteSearchTerm = '';
+  renderPalette();
+}
+
+function onPaletteSearch(val) {
+  paletteSearchTerm = val.trim();
+  renderPalette();
+}
+
+function addLinePreviewIndicator(lp, li) {
+  if (!selectedSeg || selectedSeg.lineIdx !== li) return;
+  var si = selectedSeg.segIdx;
+  var target = lp.querySelector('.seg-click[data-seg="' + si + '"]') ||
+               lp.querySelector('.lp-seg[data-seg="' + si + '"]');
+  if (!target) return;
+  target.style.position = 'relative';
+  target.style.display = 'inline-block';
+  // Add padding to the line span so the indicator is visible above
+  var lineSpan = lp.querySelector('.line') || lp;
+  lineSpan.style.paddingTop = '14px';
+  var ind = document.createElement('span');
+  ind.className = 'lp-seg-indicator';
+  ind.textContent = '\u2193';
+  target.prepend(ind);
+}
+
+function renderLines() {
+  // Clamp active line tab
+  if (activeLineTab >= state.lines.length) activeLineTab = state.lines.length - 1;
+  if (activeLineTab < 0) activeLineTab = 0;
+
+  // Render line tabs
+  const tabsEl = document.getElementById('lineTabs');
+  tabsEl.innerHTML = state.lines.map((line, li) => {
+    const isActive = li === activeLineTab;
+    const moveL = isActive && li > 0 ? `<span class="line-tab-move" onclick="event.stopPropagation();moveLine(${li},-1)" title="Move line up">\u2190</span>` : '';
+    const moveR = isActive && li < state.lines.length - 1 ? `<span class="line-tab-move" onclick="event.stopPropagation();moveLine(${li},1)" title="Move line down">\u2192</span>` : '';
+    return `<div class="line-tab ${isActive ? 'active' : ''}" onclick="setActiveLineTab(${li})">${moveL}Line ${li + 1}${moveR}</div>`;
+  }).join('') +
+  `<button class="line-tab-add" onclick="addLine()" title="Add line">+</button>`;
+
+  document.getElementById('lineTabsActions').innerHTML =
+    `<span class="nf-toggle"><input type="checkbox" id="nerdFontToggle" ${state.nerdFont?'checked':''} onchange="toggleNerdFont(this.checked)"><label for="nerdFontToggle">Enable Nerd Font icons</label></span>
+    <button class="btn btn-primary" onclick="copyJSON()">Copy JSON</button>
+    <div class="actions-menu" style="position:relative;">
+      <button class="btn btn-secondary" onclick="toggleActionsMenu(event)" id="actionsMenuBtn">More \u25BE</button>
+      <div class="actions-dropdown" id="actionsDropdown">
+        <button onclick="showImport(); closeActionsMenu()">Import JSON</button>
+        <button onclick="showAsciiArt(); closeActionsMenu()">Add Multi-line Art</button>
+        <button onclick="showSettings(); closeActionsMenu()">Settings</button>
+        <button onclick="resetAll(); closeActionsMenu()" style="color:var(--red);">Reset</button>
+      </div>
+    </div>`;
+
+  // Render active line content
+  const contentEl = document.getElementById('lineTabContent');
+  const li = activeLineTab;
+  const line = state.lines[li];
+  if (!line) { contentEl.innerHTML = ''; return; }
+
+  // Detach editor before innerHTML wipe so it survives
+  const editor = document.getElementById('segEditor');
+  if (editor) document.body.appendChild(editor);
+
+  const sepVal = line.separator || '';
+
+  contentEl.innerHTML = `
+    <div class="line-tab-props">
+      <label>Seg Separator <input type="text" value="${sepVal}" style="width:50px;min-width:50px;" onchange="setLineProp(${li},'separator',this.value)"></label>
+      <label>Sep Dim <input type="checkbox" ${line.separatorStyle?.dim?'checked':''} onchange="setLineSepDim(${li},this.checked)"></label>
+      <label>Background <select onchange="setLineProp(${li},'backgroundStyle',this.value)">
+        ${['none','solid','gradient','fade','neon'].map(v => `<option value="${v}" ${(line.backgroundStyle||'')==v?'selected':''}>${v}</option>`).join('')}
+      </select></label>
+      <label>BG Color <input type="color" value="${line.background||'#333333'}" onchange="setLineProp(${li},'background',this.value)"></label>
+      ${state.lines.length > 1 ? `<button class="btn btn-danger" style="padding:2px 8px;font-size:11px;align-self:end;" onclick="removeLine(${li})">Remove Line</button>` : ''}
+    </div>
+    <div class="seg-zone ${line.segments.length===0?'empty':''}" data-line="${li}">
+      ${line.segments.map((seg, si) => {
+        const def = SEGMENT_TYPES.find(s => s.type === seg.type) || { label: seg.type, color: '#aaa' };
+        const dotColor = seg.style?.color || def.color;
+        const isSel = selectedSeg && selectedSeg.lineIdx === li && selectedSeg.segIdx === si;
+        const chipLabel = seg.type === 'custom-icon' ? (seg.content || '\u2728') : def.label;
+        const isProductSeg = seg.type === 'icon' || seg.type === 'label' || seg.type === 'tagline';
+        const chipExtra = (seg.type === 'command') ? ': ' + (seg.content || '').substring(0, 20) :
+                         (seg.type === 'message' && seg.messages?.length) ? ': ' + seg.messages.length + ' msgs' :
+                         (isProductSeg && seg.content) ? ': ' + seg.content.substring(0, 15) :
+                         (isProductSeg && seg.source) ? ' (.product.json)' :
+                         (seg.type !== 'custom-icon' && !isProductSeg && seg.content) ? ': '+seg.content : '';
+        return `<span class="seg-chip ${isSel?'selected':''}" draggable="true" data-line="${li}" data-seg="${si}"
+          onclick="selectSeg(${li},${si})">
+          <span class="dot" style="background:${dotColor}"></span>
+          ${chipLabel}${chipExtra}
+          <span class="remove" onclick="event.stopPropagation();removeSeg(${li},${si})">\u00d7</span>
+        </span>`;
+      }).join('')}
+    </div>
+    <div class="line-preview ${state.nerdFont ? 'nf-active' : ''}" style="margin-top:6px;">
+      ${line.segments.length > 0 ? renderLineHtml(line, li, {compact: true}) : '<span style="color:var(--muted);font-size:12px;">Add segments to see preview</span>'}
+    </div>`;
+
+  wireDragDrop(contentEl);
+
+  // Click handler on line preview segments
+  var lpEl = contentEl.querySelector('.line-preview');
+  if (lpEl) {
+    lpEl.addEventListener('click', function(e) {
+      var seg = e.target.closest('.seg-click');
+      if (!seg) return;
+      var si = parseInt(seg.dataset.seg);
+      selectSeg(li, si);
+    });
+  }
+
+  // Scroll selected chip into view
+  const selChip = contentEl.querySelector('.seg-chip.selected');
+  if (selChip) selChip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Show ↓ indicator above selected segment in line preview
+  const lpEl2 = contentEl.querySelector('.line-preview');
+  if (lpEl2) addLinePreviewIndicator(lpEl2, li);
+
+  // Re-insert editor below the line preview
+  const previewEl = contentEl.querySelector('.line-preview');
+  if (editor && previewEl) previewEl.insertAdjacentElement('afterend', editor);
+}
+
+function setActiveLineTab(idx) {
+  activeLineTab = idx;
+  selectedSeg = null;
+  render();
+  // Scroll active tab into view
+  const tab = document.querySelectorAll('.line-tab')[idx];
+  if (tab) tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+}
+
+// ── Positional drag-drop system ─────────────────────────────────────────────
+let dropIndicator = null;  // the glowing bar element
+let dropTarget = null;     // { lineIdx, insertIdx }
+
+function getInsertIndex(zone, mouseX) {
+  const chips = Array.from(zone.querySelectorAll('.seg-chip'));
+  if (chips.length === 0) return 0;
+  for (let i = 0; i < chips.length; i++) {
+    const rect = chips[i].getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    if (mouseX < midX) return i;
+  }
+  return chips.length;
+}
+
+function showIndicator(zone, insertIdx) {
+  removeIndicator();
+  dropIndicator = document.createElement('div');
+  dropIndicator.className = 'drop-indicator';
+  const chips = Array.from(zone.querySelectorAll('.seg-chip'));
+  if (chips.length === 0 || insertIdx === 0) {
+    zone.prepend(dropIndicator);
+  } else if (insertIdx >= chips.length) {
+    zone.appendChild(dropIndicator);
+  } else {
+    zone.insertBefore(dropIndicator, chips[insertIdx]);
+  }
+}
+
+function highlightZones() {
+  document.body.classList.add('dragging');
+  document.querySelectorAll('.seg-zone').forEach(z => z.classList.add('drag-ready'));
+}
+function clearZoneHighlights() {
+  document.body.classList.remove('dragging');
+  document.querySelectorAll('.seg-zone').forEach(z => z.classList.remove('drag-ready', 'drag-over'));
+}
+
+function removeIndicator() {
+  if (dropIndicator && dropIndicator.parentNode) {
+    dropIndicator.parentNode.removeChild(dropIndicator);
+  }
+  dropIndicator = null;
+  dropTarget = null;
+}
+
+function wireDragDrop(wrap) {
+  // Segment chip drag start
+  wrap.querySelectorAll('.seg-chip').forEach(chip => {
+    chip.addEventListener('dragstart', e => {
+      const li = parseInt(chip.dataset.line);
+      const si = parseInt(chip.dataset.seg);
+      dragData = { source: 'line', lineIdx: li, segIdx: si };
+      chip.classList.add('drag-source');
+      e.dataTransfer.effectAllowed = 'move';
+      // Needed for Firefox
+      e.dataTransfer.setData('text/plain', '');
+      highlightZones();
+    });
+    chip.addEventListener('dragend', () => {
+      chip.classList.remove('drag-source');
+      removeIndicator();
+      clearZoneHighlights();
+    });
+  });
+
+  // Zone drag events — compute insertion position on every dragover
+  wrap.querySelectorAll('.seg-zone').forEach(zone => {
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = dragData?.source === 'palette' ? 'copy' : 'move';
+      zone.classList.add('drag-over');
+
+      const li = parseInt(zone.dataset.line);
+      const insertIdx = getInsertIndex(zone, e.clientX);
+
+      // Skip indicator at the source chip's current position (same line, same or adjacent slot)
+      if (dragData?.source === 'line' && dragData.lineIdx === li) {
+        if (insertIdx === dragData.segIdx || insertIdx === dragData.segIdx + 1) {
+          // Hovering right where it already is — show indicator but muted
+        }
+      }
+
+      showIndicator(zone, insertIdx);
+      dropTarget = { lineIdx: li, insertIdx };
+    });
+
+    zone.addEventListener('dragleave', e => {
+      // Only remove if actually leaving the zone (not entering a child)
+      if (!zone.contains(e.relatedTarget)) {
+        zone.classList.remove('drag-over');
+        removeIndicator();
+      }
+    });
+
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const targetLine = dropTarget?.lineIdx ?? parseInt(zone.dataset.line);
+      let targetIdx = dropTarget?.insertIdx ?? state.lines[targetLine].segments.length;
+      removeIndicator();
+
+      if (dragData?.source === 'palette') {
+        const newSeg = { type: dragData.type };
+        if (dragData.type === 'custom-icon') newSeg.content = '\u2728';
+        if (dragData.type === 'command') { newSeg.content = 'echo hello'; newSeg.cache = 60; }
+        if (dragData.type === 'icon') newSeg.content = '\u{1F999}';
+        if (dragData.type === 'label') newSeg.content = 'My App';
+        if (dragData.type === 'tagline') newSeg.content = 'Built with Claude Code';
+        if (dragData.type === 'message') { newSeg.messages = ['Pull. Run. Done.', 'No cloud required.']; newSeg.interval = 300; }
+        state.lines[targetLine].segments.splice(targetIdx, 0, newSeg);
+      } else if (dragData?.source === 'line') {
+        const srcLine = dragData.lineIdx;
+        const srcIdx = dragData.segIdx;
+        const seg = state.lines[srcLine].segments[srcIdx];
+
+        if (srcLine === targetLine) {
+          // Reorder within same line
+          if (targetIdx === srcIdx || targetIdx === srcIdx + 1) {
+            // Dropped in same position — no-op
+            dragData = null;
+            render();
+            return;
+          }
+          // Remove from old position, adjust target index
+          state.lines[srcLine].segments.splice(srcIdx, 1);
+          if (targetIdx > srcIdx) targetIdx--;
+          state.lines[targetLine].segments.splice(targetIdx, 0, seg);
+        } else {
+          // Move across lines
+          state.lines[srcLine].segments.splice(srcIdx, 1);
+          state.lines[targetLine].segments.splice(targetIdx, 0, seg);
+        }
+
+        // Update selection to follow the moved segment
+        if (selectedSeg?.lineIdx === srcLine && selectedSeg?.segIdx === srcIdx) {
+          selectedSeg = { lineIdx: targetLine, segIdx: targetIdx };
+        }
+      }
+      clearActivePreset();
+      dragData = null;
+      render();
+    });
+  });
+}
+
+function renderRateBar(label, pct, suffix, barStyle, resetStr) {
+    const width = 6;
+    const filled = Math.round(pct * width / 100);
+    const empty = width - filled;
+    const fc = barStyle === 'block' ? '\u2593' : '\u25cf'; // ▓ or ●
+    const ec = barStyle === 'block' ? '\u2591' : '\u25cb'; // ░ or ○
+    let barColor;
+    if (pct >= 90) barColor = '#ff5555';
+    else if (pct >= 70) barColor = '#e6c800';
+    else if (pct >= 50) barColor = '#ffb055';
+    else barColor = '#00a000';
+    const filledDots = '<span style="color:' + barColor + '">' + fc.repeat(filled) + '</span>';
+    const emptyDots = '<span style="opacity:0.4">' + ec.repeat(empty) + '</span>';
+    let out = '<span style="color:#dcdcdc">' + label + '</span> ' + filledDots + emptyDots + ' <span style="color:#2e9599">' + suffix + '</span>';
+    if (resetStr) out += ' <span style="opacity:0.5">@' + resetStr + '</span>';
+    return out;
+}
+
+function renderLineHtml(line, li, opts) {
+    const compact = opts?.compact || false;
+    const resolved = resolveLineStyle(line);
+    const bgStyle = resolved.backgroundStyle || 'none';
+    const bgColor = resolved.backgroundColor || '';
+    const labelColor = resolved.labelColor || '#ffffff';
+    let lineBg = '';
+    if (bgStyle === 'solid' || bgStyle === 'fade' || bgStyle === 'gradient') lineBg = bgColor;
+    else if (bgStyle === 'neon') lineBg = '#1a1a2e';
+
+    let lineStyle = '';
+    if (lineBg) lineStyle = `background:${lineBg};`;
+
+    // Gradient overlay via CSS
+    let gradientStyle = '';
+    if (bgStyle === 'gradient' && bgColor) {
+      gradientStyle = `background: linear-gradient(to right, ${bgColor}, ${bgColor}00);`;
+    } else if (bgStyle === 'fade' && bgColor) {
+      gradientStyle = `background: linear-gradient(to right, ${bgColor}, transparent 40%);`;
+    }
+
+    const sep = line.separator;
+    const sepDim = line.separatorStyle?.dim;
+
+    // Render segments
+    const segHtmls = line.segments.map(seg => {
+      const def = SEGMENT_TYPES.find(s => s.type === seg.type) || { color: '#aaa', mock: seg.type };
+      const c = seg.style?.color || def.color;
+      const bold = seg.style?.bold;
+      const dim = seg.style?.dim;
+      let text = def.mock;
+      if (seg.type === 'icon') text = seg.content || def.mock;
+      if (seg.type === 'label') text = seg.content || def.mock;
+      if (seg.type === 'tagline') text = seg.content || def.mock;
+      if (seg.type === 'message') text = seg.messages?.length ? `\u2014 ${seg.messages[0]} \u2014` : def.mock;
+      if ((seg.type === 'text' || seg.type === 'sep') && seg.content) text = seg.content;
+      if (seg.type === 'custom-icon') text = (seg.content || '\u2728') + ' ';
+      if (seg.type === 'env') text = seg.content ? `$${seg.content}` : def.mock;
+      if (seg.type === 'command') text = seg.content ? `$(${seg.content})` : '$ ...';
+      if (seg.type === 'label') text = `<b>${text}</b>`;
+      if (seg.type === 'icon') text = text + ' ';
+      if (seg.type === 'message') text = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + text;
+
+      // Nerd Font icon prefix
+      const nfOverride = seg.icon;
+      const showNf = nfOverride === true || (nfOverride !== false && state.nerdFont);
+      if (showNf && NF_ICONS[seg.type]) text = `<span style="font-size:1.3em;line-height:1">${NF_ICONS[seg.type]}</span> ${text}`;
+
+      let style = `color:${c};`;
+      if (seg.type === 'text' || seg.type === 'sep') style += 'white-space:pre;';
+      if (bold) style += 'font-weight:bold;';
+      if (dim || seg.type === 'tagline') style += 'opacity:0.6;';
+      if (seg.type === 'pct-used') text = text.replace('used', '<span style="opacity:0.5">used</span>');
+      if (seg.type === 'pct-remain') text = text.replace('remain', '<span style="opacity:0.5">remain</span>');
+      if (seg.type === 'rate-session') return renderRateBar('5h', 50, '50%', seg.barStyle, seg.showReset !== false ? '11:00am' : '');
+      if (seg.type === 'rate-weekly') return renderRateBar('7d', 67, '67%', seg.barStyle, seg.showReset === true ? 'mar 10, 3:00am' : '');
+      if (seg.type === 'rate-extra') return renderRateBar('extra', 25, '$8/$50', seg.barStyle, '');
+      if (seg.type === 'ctx-target' || seg.type === 'rate-target') return def.mock;
+      let rendered = `<span style="${style}">${text}</span>`;
+      // Prefix/suffix in preview (dim, excluded for text/sep/custom-icon)
+      // When nerd icon is shown, prefix is suppressed (icon replaces it)
+      const iconShown = showNf && NF_ICONS[seg.type];
+      if (!NO_PREFIX_SUFFIX.includes(seg.type)) {
+        if (seg.prefix && !iconShown) rendered = `<span style="opacity:0.5">${seg.prefix.replace(/</g,'&lt;')} </span>` + rendered;
+        if (seg.suffix) rendered = rendered + `<span style="opacity:0.5"> ${seg.suffix.replace(/</g,'&lt;')}</span>`;
+      }
+      // Per-segment padding
+      const pl = parseInt(seg.padLeft) || 0;
+      const pr = parseInt(seg.padRight) || 0;
+      if (pl > 0) rendered = `<span style="white-space:pre">${' '.repeat(pl)}</span>` + rendered;
+      if (pr > 0) rendered = rendered + `<span style="white-space:pre">${' '.repeat(pr)}</span>`;
+      return rendered;
+    });
+
+    let sepHtml = '';
+    if (sep) {
+      const sepStyle = `color:${sepDim ? '#666' : '#aaa'};opacity:0.6;`;
+      sepHtml = `<span style="${sepStyle}"> ${sep.replace('<','&lt;')} </span>`;
+    } else {
+      sepHtml = ' ';
+    }
+    // Wrap each segment in an identifiable span for indicator targeting
+    // Use original index (si) so indicator can find the right segment even if some are empty
+    const wrappedHtmls = segHtmls.map((h, si) =>
+      h ? `<span class="lp-seg" data-line="${li}" data-seg="${si}" style="position:relative;display:inline-block;">${h}</span>` : null
+    ).filter(Boolean);
+    const content = wrappedHtmls.join(sepHtml);
+
+    const padStyle = gradientStyle || lineStyle;
+    const padding = lineBg ? '  ' : '';
+    const lineNum = li !== undefined ? `<span style="position:absolute;right:0;top:50%;transform:translateY(-50%);color:var(--muted);opacity:0.3;font-size:9px;padding:0 6px;border-left:1px solid var(--border);">${li + 1}</span>` : '';
+    return `<span class="line" style="${padStyle};display:block;padding:1px 0;padding-left:2ch;padding-right:24px;position:relative;">${padding}${content}${lineNum}</span>`;
+}
+
+// Nerd Font icon map
+const NF_ICONS = {
+  // Core
+  'model': '\u{F06A9}', 'dir': '\u{F07B}', 'version': '\u{F02B}',
+  // Git
+  'branch': '\u{E725}', 'dir-branch': '\u{E725}', 'diff-stats': '\u{F440}',
+  // Tokens & context
+  'tokens': '\u{F080}', 'pct-used': '\u{F200}', 'pct-remain': '\u{F200}',
+  // Burn rate
+  'burn-min': '\u{F06D}', 'burn-hr': '\u{F06D}', 'burn-spark': '\u{F06D}',
+  // Rate limits
+  'rate-session': '\u{F0E4}', 'rate-weekly': '\u{F073}', 'rate-extra': '\u{F055}',
+  'rate-spark': '\u{F0E4}',
+  // ETAs
+  'eta-session': '\u{F017}', 'eta-session-min': '\u{F017}', 'eta-session-hr': '\u{F017}',
+  'eta-weekly': '\u{F017}', 'eta-weekly-min': '\u{F017}', 'eta-weekly-hr': '\u{F017}',
+  // Cost
+  'cost': '\u{F155}', 'cost-min': '\u{F155}', 'cost-hr': '\u{F155}',
+  'cost-7d': '\u{F155}', 'cost-spark': '\u{F155}',
+  // Sparkline targets
+  'ctx-spark': '\u{F1FE}', 'ctx-target': '\u{F05B}', 'rate-target': '\u{F05B}',
+  // Docker
+  'docker': '\u{F308}', 'docker-db': '\u{F1C0}',
+  // GitHub
+  'gh-pr': '\u{E726}', 'gh-checks': '\u{F013}', 'gh-reviews': '\u{F00C}',
+  'gh-actions': '\u{F04B}', 'gh-notifs': '\u{F0F3}', 'gh-issues': '\u{F41B}',
+  'gh-pr-count': '\u{E726}', 'gh-pr-comments': '\u{F075}', 'gh-stars': '\u{F005}',
+  // Session
+  'session-cost': '\u{F155}', 'session-duration': '\u{F017}',
+  'lines-changed': '\u{F440}', 'cache-hit': '\u{F06BC}',
+  'total-tokens': '\u{F0EC}', 'api-wait': '\u{F254}',
+  // Mode & identity
+  'vim-mode': '\u{E7C5}', 'worktree': '\u{E725}', 'agent': '\u{F06A9}',
+  'cc-version': '\u{F02B}', 'model-id': '\u{F06A9}',
+  // Rate limits (missing)
+  'rate-opus': '\u{F219}',
+  // Effort & warnings
+  'effort': '\u{F02A0}', 'compact-warn': '\u{F071}',
+  // Env
+  'env': '\u{F462}'
+};
+
+let nfHintDismissed = false;
+let nfFontLoaded = false;
+function loadNerdFont() {
+  if (nfFontLoaded) return;
+  nfFontLoaded = true;
+  const style = document.createElement('style');
+  style.textContent = `@font-face { font-family: 'Hack Nerd Font Mono'; src: url('https://cdn.jsdelivr.net/gh/ryanoasis/nerd-fonts@latest/patched-fonts/Hack/Regular/HackNerdFontMono-Regular.ttf') format('truetype'); font-weight: normal; font-style: normal; font-display: swap; }`;
+  document.head.appendChild(style);
+}
+function showNfHint() {
+  const hint = document.getElementById('nfHint');
+  const overlay = document.getElementById('nfOverlay');
+  const toggle = document.getElementById('nerdFontToggle');
+  if (hint && toggle) {
+    const r = toggle.getBoundingClientRect();
+    hint.style.top = (r.bottom + 8) + 'px';
+    hint.style.right = (window.innerWidth - r.right) + 'px';
+    hint.style.display = 'block';
+  }
+  if (overlay) overlay.style.display = 'block';
+}
+function hideNfHint() {
+  const hint = document.getElementById('nfHint');
+  const overlay = document.getElementById('nfOverlay');
+  if (hint) hint.style.display = 'none';
+  if (overlay) overlay.style.display = 'none';
+}
+function toggleNerdFont(on) {
+  state.nerdFont = on;
+  try { localStorage.setItem('oml-nerdFont', on ? '1' : ''); } catch(e) {}
+  if (on) loadNerdFont();
+  if (!on) nfHintDismissed = false;
+  if (on && !nfHintDismissed) showNfHint();
+  else hideNfHint();
+  document.getElementById('preview').classList.toggle('nf-active', on);
+  document.querySelectorAll('.line-preview').forEach(el => el.classList.toggle('nf-active', on));
+  render();
+}
+function dismissNfHint() {
+  nfHintDismissed = true;
+  hideNfHint();
+}
+
+function renderPreview() {
+  const el = document.getElementById('preview');
+  const hr = '<span class="line" style="display:block;border-bottom:1px solid var(--border);opacity:0.5;height:0;line-height:0;margin:3px 0;"></span>';
+  const prompt = '<span class="line" style="display:block;color:var(--muted);opacity:0.5;">\u276f <span style="background:var(--muted);color:#000;opacity:0.6;">&nbsp;</span></span>';
+  el.innerHTML = hr + prompt + hr + state.lines.map((line, li) => renderLineHtml(line, li)).join('');
+}
+
+function resolveLineStyle(line) {
+  return {
+    backgroundStyle: line.backgroundStyle || 'none',
+    backgroundColor: line.background || '',
+  };
+}
+
+function renderJSON() {
+  const cfg = buildConfig();
+  document.getElementById('jsonOut').textContent = JSON.stringify(cfg, null, 2);
+}
+
+function getConfigFields(seg) {
+  const def = SEGMENT_TYPES.find(s => s.type === seg.type) || {};
+  const fields = [...(def.config || [])];
+  if (!NO_PREFIX_SUFFIX.includes(seg.type)) {
+    fields.push(...PREFIX_SUFFIX_CONFIG);
+  }
+  fields.push(...PAD_CONFIG);
+  return fields;
+}
+
+function renderConfigInputs(seg) {
+  const container = document.getElementById('seConfigFields');
+  container.innerHTML = '';
+  const fields = getConfigFields(seg);
+  fields.forEach(c => {
+    const label = document.createElement('label');
+    label.textContent = (c.label || c.field) + ' ';
+    if (c.type === 'select') {
+      const select = document.createElement('select');
+      select.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:4px 6px;';
+      (c.options || []).forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if ((seg[c.field] || c.default) === opt) o.selected = true;
+        select.appendChild(o);
+      });
+      select.addEventListener('change', () => {
+        if (select.value && select.value !== c.default) seg[c.field] = select.value;
+        else delete seg[c.field];
+        clearActivePreset(); renderPreview(); renderJson();
+      });
+      label.appendChild(select);
+    } else if (c.type === 'checkbox') {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = seg[c.field] !== undefined ? !!seg[c.field] : !!c.default;
+      cb.style.cssText = 'margin-right:4px;vertical-align:middle;';
+      cb.addEventListener('change', () => {
+        if (cb.checked !== c.default) seg[c.field] = cb.checked;
+        else delete seg[c.field];
+        clearActivePreset(); renderPreview(); renderJson();
+      });
+      label.appendChild(cb);
+      const desc = document.createElement('span');
+      desc.textContent = c.desc || '';
+      desc.style.cssText = 'font-size:11px;opacity:0.6;';
+      label.appendChild(desc);
+    } else if (c.type === 'string[]') {
+      const textarea = document.createElement('textarea');
+      textarea.placeholder = c.desc || '';
+      textarea.value = (seg[c.field] || []).join('\n');
+      textarea.style.cssText = 'min-width:280px;height:60px;resize:vertical;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;padding:4px 6px;';
+      textarea.addEventListener('input', () => {
+        const lines = textarea.value.split('\n').filter(l => l.trim());
+        if (lines.length) seg[c.field] = lines; else delete seg[c.field];
+        clearActivePreset(); renderPreview(); renderJson();
+      });
+      label.appendChild(textarea);
+    } else {
+      const input = document.createElement('input');
+      input.type = c.type === 'number' ? 'number' : 'text';
+      input.placeholder = c.default ? `default: ${c.default}` : (c.desc || '');
+      if (c.type === 'number') {
+        input.value = seg[c.field] !== undefined ? seg[c.field] : '';
+        input.style.cssText = 'width:80px;min-width:70px;';
+      } else {
+        input.value = seg[c.field] || '';
+      }
+      input.addEventListener('input', () => {
+        if (c.type === 'number') {
+          if (input.value !== '') seg[c.field] = Number(input.value);
+          else delete seg[c.field];
+        } else {
+          if (input.value) seg[c.field] = input.value; else delete seg[c.field];
+        }
+        clearActivePreset(); renderPreview(); renderJson();
+      });
+      label.appendChild(input);
+    }
+    container.appendChild(label);
+  });
+}
+
+function renderSegEditor() {
+  const el = document.getElementById('segEditor');
+  if (!selectedSeg) { el.classList.remove('active'); return; }
+  const seg = state.lines[selectedSeg.lineIdx]?.segments[selectedSeg.segIdx];
+  if (!seg) { el.classList.remove('active'); selectedSeg = null; return; }
+  el.classList.add('active');
+  const def = SEGMENT_TYPES.find(s => s.type === seg.type) || {};
+  document.getElementById('segEditorTitle').textContent = `${def.label || seg.type} Options`;
+  const descEl = document.getElementById('segEditorDesc');
+  const howText = def.details?.how || def.desc || '';
+  if (howText) { descEl.innerHTML = howText; descEl.style.display = 'block'; }
+  else { descEl.innerHTML = ''; descEl.style.display = 'none'; }
+  document.getElementById('seColor').value = seg.style?.color || def.color || '#ffffff';
+  document.getElementById('seBg').value = seg.style?.background || '#000000';
+  document.getElementById('seBold').checked = seg.style?.bold || false;
+  document.getElementById('seDim').checked = seg.style?.dim || false;
+  // Nerd Font icon toggle (only for segment types that have an NF icon)
+  const hasNfIcon = !!NF_ICONS[seg.type];
+  const nfLabel = document.getElementById('seNfIconLabel');
+  const nfCheck = document.getElementById('seNfIcon');
+  nfLabel.style.display = hasNfIcon ? '' : 'none';
+  if (hasNfIcon) {
+    nfCheck.checked = seg.icon !== false;
+  }
+  const isCustomIcon = seg.type === 'custom-icon';
+  document.getElementById('seIconField').style.display = isCustomIcon ? 'flex' : 'none';
+  if (isCustomIcon) document.getElementById('seIconInput').value = seg.content || '\u2728';
+  renderConfigInputs(seg);
+}
+
+// ── Actions ─────────────────────────────────────────────────────────────────
+function selectSeg(li, si) {
+  selectedSeg = (selectedSeg?.lineIdx === li && selectedSeg?.segIdx === si) ? null : { lineIdx: li, segIdx: si };
+  render();
+}
+
+function removeSeg(li, si) {
+  state.lines[li].segments.splice(si, 1);
+  if (selectedSeg?.lineIdx === li && selectedSeg?.segIdx === si) selectedSeg = null;
+  clearActivePreset();
+  render();
+}
+
+function addLine() {
+  if (state.lines.length >= 20) return;
+  state.lines.push({ segments: [] });
+  activeLineTab = state.lines.length - 1;
+  selectedSeg = null;
+  clearActivePreset();
+  render();
+}
+
+function moveLine(li, dir) {
+  const target = li + dir;
+  if (target < 0 || target >= state.lines.length) return;
+  const tmp = state.lines[li];
+  state.lines[li] = state.lines[target];
+  state.lines[target] = tmp;
+  if (activeLineTab === li) activeLineTab = target;
+  else if (activeLineTab === target) activeLineTab = li;
+  if (selectedSeg) {
+    if (selectedSeg.lineIdx === li) selectedSeg.lineIdx = target;
+    else if (selectedSeg.lineIdx === target) selectedSeg.lineIdx = li;
+  }
+  clearActivePreset();
+  render();
+}
+
+function removeLine(li) {
+  state.lines.splice(li, 1);
+  if (activeLineTab >= state.lines.length) activeLineTab = state.lines.length - 1;
+  selectedSeg = null;
+  clearActivePreset();
+  render();
+}
+
+function setLineProp(li, prop, val) {
+  if (val === '' || val === 'none') delete state.lines[li][prop];
+  else state.lines[li][prop] = val;
+  clearActivePreset();
+  render();
+}
+
+function setLineSepDim(li, checked) {
+  if (!state.lines[li].separatorStyle) state.lines[li].separatorStyle = {};
+  state.lines[li].separatorStyle.dim = checked;
+  if (!checked) delete state.lines[li].separatorStyle.dim;
+  if (Object.keys(state.lines[li].separatorStyle).length === 0) delete state.lines[li].separatorStyle;
+  clearActivePreset();
+  render();
+}
+
+// Style editor inputs (color, bg, bold, dim)
+['seColor','seBg','seBold','seDim'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    if (!selectedSeg) return;
+    const seg = state.lines[selectedSeg.lineIdx].segments[selectedSeg.segIdx];
+    if (!seg) return;
+    const def = SEGMENT_TYPES.find(s => s.type === seg.type) || {};
+    const color = document.getElementById('seColor').value;
+    const bg = document.getElementById('seBg').value;
+    const bold = document.getElementById('seBold').checked;
+    const dim = document.getElementById('seDim').checked;
+
+    // Build style object (only include non-default values)
+    const style = {};
+    if (color && color !== (def.color || '#ffffff')) style.color = color;
+    if (bg && bg !== '#000000') style.background = bg;
+    if (bold) style.bold = true;
+    if (dim) style.dim = true;
+    if (Object.keys(style).length > 0) seg.style = style;
+    else delete seg.style;
+    clearActivePreset();
+    render();
+  });
+});
+
+document.getElementById('seNfIcon').addEventListener('input', () => {
+  if (!selectedSeg) return;
+  const seg = state.lines[selectedSeg.lineIdx].segments[selectedSeg.segIdx];
+  if (!seg) return;
+  const checked = document.getElementById('seNfIcon').checked;
+  if (checked) delete seg.icon;
+  else seg.icon = false;
+  clearActivePreset();
+  render();
+});
+
+function clearSegStyle() {
+  if (!selectedSeg) return;
+  const seg = state.lines[selectedSeg.lineIdx].segments[selectedSeg.segIdx];
+  if (!seg) return;
+  delete seg.style;
+  // Remove all config fields
+  const fields = getConfigFields(seg);
+  fields.forEach(c => delete seg[c.field]);
+  render();
+}
+
+// ── Build JSON config ───────────────────────────────────────────────────────
+// Outputs oh-my-line.json format: { "oh-my-lines": [...] }
+function buildConfig() {
+  const lines = [];
+  for (const line of state.lines) {
+    const lo = {};
+    if (line.separator) lo.separator = line.separator;
+    if (line.separatorStyle && Object.keys(line.separatorStyle).length > 0) lo.separatorStyle = { ...line.separatorStyle };
+    if (line.backgroundStyle && line.backgroundStyle !== 'none') lo.backgroundStyle = line.backgroundStyle;
+    if (line.background) lo.background = line.background;
+    lo.segments = line.segments.map(seg => {
+      const so = { type: seg.type };
+      if (seg.style && Object.keys(seg.style).length > 0) so.style = { ...seg.style };
+      if (seg.icon === false) so.icon = false;
+      // Serialize all config fields from the segment's type config array
+      const fields = getConfigFields(seg);
+      fields.forEach(c => {
+        if (seg[c.field] !== undefined && seg[c.field] !== '') {
+          if (c.type === 'string[]' && Array.isArray(seg[c.field])) so[c.field] = [...seg[c.field]];
+          else so[c.field] = seg[c.field];
+        }
+      });
+      return so;
+    });
+    lines.push(lo);
+  }
+
+  const cfg = {};
+  if (state.usageProxy) cfg.usageProxy = { claudeCode: state.usageProxy };
+  if (state.nerdFont) cfg.nerdFont = true;
+  cfg["oh-my-lines"] = lines;
+  return cfg;
+}
+
+function copyJSON() {
+  const json = JSON.stringify(buildConfig(), null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1500);
+  });
+}
+
+function showSettings() {
+  document.getElementById('usageProxyInput').value = state.usageProxy || '';
+  document.getElementById('settingsDialog').showModal();
+}
+
+function closeSettings() {
+  const val = document.getElementById('usageProxyInput').value.trim();
+  state.usageProxy = val;
+  try { localStorage.setItem('oml-usageProxy', val); } catch(e) {}
+  document.getElementById('settingsDialog').close();
+  renderJSON();
+}
+
+function showImport() {
+  document.getElementById('importText').value = '';
+  document.getElementById('importDialog').showModal();
+}
+
+function doImport() {
+  try {
+    let text = document.getElementById('importText').value.trim();
+    let root = JSON.parse(text);
+    let importLines = null;
+
+    if (root['oh-my-lines'] && Array.isArray(root['oh-my-lines'])) {
+      // New oh-my-line.json format
+      importLines = root['oh-my-lines'];
+    } else if (root.statusline) {
+      // Legacy .product.json format — convert identity to segment content
+      const legacyIcon = root.icon || '';
+      const legacyLabel = root.name || root.label || '';
+      const legacyTagline = root.tagline || '';
+      const legacyMessages = root.statusline.messages || [];
+      const legacyInterval = root.statusline.messageInterval || 300;
+      importLines = (root.statusline.lines || []).map(line => {
+        const lo = { ...line };
+        lo.segments = (line.segments || []).map(seg => {
+          const so = { ...seg };
+          // Push legacy identity values as content onto matching segment types
+          if (so.type === 'icon' && legacyIcon && !so.content) so.content = legacyIcon;
+          if (so.type === 'label' && legacyLabel && !so.content) so.content = legacyLabel;
+          if (so.type === 'tagline' && legacyTagline && !so.content) so.content = legacyTagline;
+          if (so.type === 'message' && legacyMessages.length && !so.messages) {
+            so.messages = legacyMessages;
+            so.interval = legacyInterval;
+          }
+          return so;
+        });
+        return lo;
+      });
+    } else if (root.lines && Array.isArray(root.lines)) {
+      // Bare { lines: [...] }
+      importLines = root.lines;
+    }
+
+    if (importLines) {
+      state.nerdFont = !!root.nerdFont;
+      state.usageProxy = (root.usageProxy && root.usageProxy.claudeCode) || '';
+      state.lines = importLines.map(line => {
+        const lo = {};
+        if (line.separator) lo.separator = line.separator;
+        if (line.separatorStyle) lo.separatorStyle = { ...line.separatorStyle };
+        if (line.backgroundStyle) lo.backgroundStyle = line.backgroundStyle;
+        if (line.background) lo.background = line.background;
+        lo.segments = (line.segments || []).map(seg => {
+          const so = { type: seg.type };
+          if (seg.style) so.style = { ...seg.style };
+          // Copy all non-type, non-style keys (generic config preservation)
+          Object.keys(seg).forEach(k => {
+            if (k !== 'type' && k !== 'style' && seg[k] !== undefined) {
+              so[k] = Array.isArray(seg[k]) ? [...seg[k]] : seg[k];
+            }
+          });
+          return so;
+        });
+        return lo;
+      });
+      selectedSeg = null;
+      render();
+    }
+    document.getElementById('importDialog').close();
+  } catch (err) {
+    alert('Invalid JSON: ' + err.message);
+  }
+}
+
+function toggleActionsMenu(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('actionsDropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) {
+    setTimeout(() => document.addEventListener('click', closeActionsMenu), 0);
+  }
+}
+function closeActionsMenu() {
+  document.getElementById('actionsDropdown').classList.remove('open');
+  document.removeEventListener('click', closeActionsMenu);
+}
+
+function resetAll() {
+  state.lines = [{ segments: [] }];
+  selectedSeg = null;
+  render();
+}
+
+// ── ASCII Art tool ──────────────────────────────────────────────────────────
+let _asciiArtOpen = false;
+let _asciiSnapshot = null; // state snapshot before art editing
+
+function showAsciiArt() {
+  // Snapshot state so Cancel can restore
+  _asciiSnapshot = JSON.parse(JSON.stringify(state.lines));
+  _asciiArtOpen = true;
+  const content = document.getElementById('asciiArtContent');
+  content.innerHTML = `
+    <h3 style="margin-bottom:12px;">Add Multi-line Art</h3>
+    <p style="font-size:11px; color:var(--muted); margin-bottom:6px;">Paste art — each row prepends as first segment, starting at chosen line. Preview updates live above.</p>
+    <textarea id="asciiArtText" oninput="previewAsciiArt()" placeholder="╔══════════╗&#10;║  hello   ║&#10;╚══════════╝" style="width:100%; height:120px; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:'SF Mono','Fira Code',Menlo,monospace; font-size:12px; padding:8px; resize:vertical;"></textarea>
+    <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+      <label style="font-size:11px; color:var(--muted); display:flex; align-items:center; gap:4px;">Start at line <select id="asciiStartLine" onchange="previewAsciiArt()" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:11px;">
+        ${Array.from({ length: state.lines.length }, (_, i) => `<option value="${i}">Line ${i + 1}</option>`).join('')}
+      </select></label>
+      <div style="margin-left:auto; display:flex; gap:6px;">
+        <button class="btn btn-secondary" onclick="cancelAsciiArt()">Cancel</button>
+        <button class="btn btn-primary" onclick="applyAsciiArt()">Apply</button>
+      </div>
+    </div>`;
+  document.getElementById('asciiArtOverlay').classList.add('open');
+  document.body.classList.add('ascii-art-open');
+  // Position panel just below the preview
+  const preview = document.querySelector('.preview-wrap');
+  const panel = document.querySelector('.ascii-panel');
+  if (preview) {
+    const rect = preview.getBoundingClientRect();
+    panel.style.marginTop = (rect.bottom + 12) + 'px';
+  }
+  document.getElementById('asciiArtText').focus();
+}
+
+function previewAsciiArt() {
+  // Restore snapshot, then apply art on top — live preview
+  state.lines = JSON.parse(JSON.stringify(_asciiSnapshot));
+  const raw = document.getElementById('asciiArtText').value;
+  const rows = raw.split('\n').filter(r => r.trim().length > 0);
+  const startAt = parseInt(document.getElementById('asciiStartLine').value, 10) || 0;
+
+  rows.forEach((row, i) => {
+    const targetLine = startAt + i;
+    const seg = { type: 'text', content: row, style: { color: '#58a6ff' } };
+    if (targetLine < state.lines.length) {
+      state.lines[targetLine].segments.unshift(seg);
+    } else {
+      state.lines.push({ separator: ' ', segments: [seg] });
+    }
+  });
+
+  renderPreview();
+}
+
+function cancelAsciiArt() {
+  if (_asciiSnapshot) state.lines = _asciiSnapshot;
+  _asciiSnapshot = null;
+  _asciiArtOpen = false;
+  document.getElementById('asciiArtOverlay').classList.remove('open');
+  document.body.classList.remove('ascii-art-open');
+  render();
+}
+
+function applyAsciiArt() {
+  _asciiSnapshot = null;
+  _asciiArtOpen = false;
+  selectedSeg = null;
+  clearActivePreset();
+  document.getElementById('asciiArtOverlay').classList.remove('open');
+  document.body.classList.remove('ascii-art-open');
+  render();
+}
+
+let activePreset = 'builder';
+
+function applyPreset(key) {
+  const preset = CONFIG_PRESETS[key];
+  if (!preset) return;
+  state.lines = preset.lines.map(line => {
+    const lo = { segments: line.segments.map(seg => ({ ...seg })) };
+    if (line.separator) lo.separator = line.separator;
+    if (line.separatorStyle) lo.separatorStyle = { ...line.separatorStyle };
+    if (line.backgroundStyle) lo.backgroundStyle = line.backgroundStyle;
+    if (line.background) lo.background = line.background;
+    return lo;
+  });
+  if (preset.nerdFont !== undefined) state.nerdFont = preset.nerdFont;
+  activePreset = key;
+  activeLineTab = 0;
+  selectedSeg = null;
+  render();
+  renderPresetBar();
+}
+
+function clearActivePreset() {
+  if (activePreset !== null) {
+    activePreset = null;
+    renderPresetBar();
+  }
+}
+
+function renderPresetBar() {
+  const el = document.getElementById('presetBar');
+  el.innerHTML = '<span class="preset-bar-label">Presets</span>' +
+    Object.entries(CONFIG_PRESETS).map(([k, p]) =>
+      `<button class="preset-btn${activePreset === k ? ' active' : ''}" onclick="applyPreset('${k}')" title="${p.desc}">${p.name}</button>`
+    ).join('');
+}
+
+// ── Icon Picker ─────────────────────────────────────────────────────────────
+const ICON_CATEGORIES = {
+  'Tech': [
+    ['\u{1F680}','rocket'],['\u{1F4BB}','laptop'],['\u{1F5A5}\uFE0F','desktop'],['\u2328\uFE0F','keyboard'],['\u{1F5B1}\uFE0F','mouse'],
+    ['\u{1F4BE}','floppy'],['\u{1F4BF}','cd'],['\u{1F4C0}','dvd'],['\u{1F50C}','plug'],['\u{1F50B}','battery'],
+    ['\u{1F4F1}','phone'],['\u{1F4E1}','satellite'],['\u{1F6F0}\uFE0F','satellite orbit'],['\u{1F916}','robot'],['\u2699\uFE0F','gear'],
+    ['\u{1F527}','wrench'],['\u{1F528}','hammer'],['\u{1F6E0}\uFE0F','tools'],['\u26CF\uFE0F','pick'],['\u{1F529}','bolt'],
+    ['\u{1F9F2}','magnet'],['\u{1F4A1}','lightbulb'],['\u{1F526}','flashlight'],['\u{1F4DF}','pager'],['\u{1F4E0}','fax'],
+    ['\u{1F5A8}\uFE0F','printer'],['\u{1F4F7}','camera'],['\u{1F3AE}','gamepad'],['\u{1F579}\uFE0F','joystick'],['\u{1F52C}','microscope'],
+    ['\u{1F52D}','telescope'],['\u{1F4FA}','tv'],['\u{1F4FB}','radio'],['\u{1F399}\uFE0F','microphone'],['\u{1F9EE}','abacus'],
+  ],
+  'Smileys': [
+    ['\u{1F600}','grinning'],['\u{1F603}','smiley'],['\u{1F604}','smile'],['\u{1F601}','grin'],['\u{1F606}','laughing'],
+    ['\u{1F605}','sweat smile'],['\u{1F923}','rofl'],['\u{1F602}','joy'],['\u{1F642}','slight smile'],['\u{1F609}','wink'],
+    ['\u{1F60A}','blush'],['\u{1F607}','innocent'],['\u{1F970}','love'],['\u{1F60D}','heart eyes'],['\u{1F929}','star struck'],
+    ['\u{1F60E}','cool sunglasses'],['\u{1F913}','nerd'],['\u{1F9D0}','monocle'],['\u{1F914}','thinking'],['\u{1F917}','hugging'],
+    ['\u{1F92B}','shushing'],['\u{1F92D}','hand over mouth'],['\u{1F60F}','smirk'],['\u{1F608}','imp'],['\u{1F47B}','ghost'],
+    ['\u{1F480}','skull'],['\u{1F916}','robot'],['\u{1F47D}','alien'],['\u{1F47E}','space invader'],['\u{1F383}','pumpkin'],
+  ],
+  'Hands': [
+    ['\u{1F44B}','wave'],['\u{1F91A}','raised hand'],['\u270B','hand'],['\u{1F596}','vulcan'],['\u{1F44C}','ok'],
+    ['\u{1F90C}','pinched'],['\u270C\uFE0F','peace'],['\u{1F91E}','crossed fingers'],['\u{1FAF0}','heart hands'],['\u{1F919}','shaka call'],
+    ['\u{1F44D}','thumbs up'],['\u{1F44E}','thumbs down'],['\u270A','fist'],['\u{1F44A}','punch'],['\u{1F91B}','left fist'],
+    ['\u{1F44F}','clap'],['\u{1F64C}','raised hands'],['\u{1FAF6}','heart hands'],['\u{1F450}','open hands'],['\u{1F91D}','handshake'],
+    ['\u{1F64F}','pray'],['\u270D\uFE0F','writing'],['\u{1F4AA}','strong muscle'],['\u{1F9BE}','mechanical arm'],['\u{1F9E0}','brain'],
+  ],
+  'Animals': [
+    ['\u{1F436}','dog'],['\u{1F431}','cat'],['\u{1F42D}','mouse'],['\u{1F439}','hamster'],['\u{1F430}','rabbit'],
+    ['\u{1F98A}','fox'],['\u{1F43B}','bear'],['\u{1F43C}','panda'],['\u{1F428}','koala'],['\u{1F42F}','tiger'],
+    ['\u{1F981}','lion'],['\u{1F42E}','cow'],['\u{1F437}','pig'],['\u{1F438}','frog'],['\u{1F435}','monkey'],
+    ['\u{1F414}','chicken'],['\u{1F427}','penguin'],['\u{1F426}','bird'],['\u{1F985}','eagle'],['\u{1F989}','owl'],
+    ['\u{1F41D}','bee'],['\u{1F41B}','bug'],['\u{1F98B}','butterfly'],['\u{1F40C}','snail'],['\u{1F419}','octopus'],
+    ['\u{1F42C}','dolphin'],['\u{1F433}','whale'],['\u{1F988}','shark'],['\u{1F40A}','crocodile'],['\u{1F996}','dinosaur'],
+    ['\u{1F984}','unicorn'],['\u{1F409}','dragon'],
+  ],
+  'Objects': [
+    ['\u2B50','star'],['\u{1F31F}','glowing star'],['\u2728','sparkles'],['\u{1F4AB}','dizzy star'],['\u26A1','zap'],
+    ['\u{1F525}','fire'],['\u{1F4A5}','boom'],['\u2744\uFE0F','snowflake'],['\u{1F308}','rainbow'],['\u2600\uFE0F','sun'],
+    ['\u{1F319}','moon'],['\u26C5','cloud sun'],['\u{1F30A}','wave'],['\u{1F4A7}','droplet'],['\u{1F3AF}','bullseye'],
+    ['\u{1F3C6}','trophy'],['\u{1F947}','gold medal'],['\u{1F396}\uFE0F','medal'],['\u{1F3C5}','sports medal'],['\u{1F451}','crown'],
+    ['\u{1F48E}','gem'],['\u{1F511}','key'],['\u{1F5DD}\uFE0F','old key'],['\u{1F6E1}\uFE0F','shield'],['\u2694\uFE0F','swords'],
+    ['\u{1F3F9}','bow arrow'],['\u{1F3AA}','circus'],['\u{1F3A8}','palette'],['\u{1F3AD}','masks'],['\u{1F3AC}','clapperboard'],
+    ['\u{1F4DA}','books'],['\u{1F4D6}','book'],['\u{1F4DD}','memo'],['\u270F\uFE0F','pencil'],['\u{1F58A}\uFE0F','pen'],
+    ['\u{1F4CC}','pushpin'],['\u{1F4CE}','paperclip'],['\u{1F517}','link'],['\u{1F4E6}','package'],['\u{1F3F7}\uFE0F','label tag'],
+  ],
+  'Symbols': [
+    ['\u2764\uFE0F','red heart'],['\u{1F9E1}','orange heart'],['\u{1F49B}','yellow heart'],['\u{1F49A}','green heart'],['\u{1F499}','blue heart'],
+    ['\u{1F49C}','purple heart'],['\u{1F5A4}','black heart'],['\u{1F90D}','white heart'],['\u{1F494}','broken heart'],['\u2763\uFE0F','heart exclamation'],
+    ['\u2705','check'],['\u274C','cross'],['\u2753','question'],['\u2757','exclamation'],['\u2B55','circle'],
+    ['\u{1F534}','red circle'],['\u{1F7E0}','orange circle'],['\u{1F7E1}','yellow circle'],['\u{1F7E2}','green circle'],['\u{1F535}','blue circle'],
+    ['\u{1F7E3}','purple circle'],['\u26AB','black circle'],['\u26AA','white circle'],['\u{1F7E4}','brown circle'],['\u{1F536}','diamond orange'],
+    ['\u{1F537}','diamond blue'],['\u{1F53A}','red triangle up'],['\u{1F53B}','red triangle down'],['\u{1F4A0}','diamond dot'],['\u{1F518}','radio button'],
+    ['\u267B\uFE0F','recycle'],['\u26A0\uFE0F','warning'],['\u{1F6AB}','prohibited'],['\u{1F512}','lock'],['\u{1F513}','unlock'],
+    ['\u267E\uFE0F','infinity'],['\u269B\uFE0F','atom'],['\u{1F549}\uFE0F','om'],['\u262E\uFE0F','peace'],['\u262F\uFE0F','yin yang'],
+  ],
+  'Flags': [
+    ['\u{1F3C1}','checkered flag'],['\u{1F6A9}','flag'],['\u{1F3F4}','black flag'],['\u{1F3F3}\uFE0F','white flag'],['\u{1F38C}','crossed flags'],
+    ['\u{1F5FA}\uFE0F','world map'],['\u{1F9ED}','compass'],['\u{1F3D4}\uFE0F','mountain snow'],['\u26F0\uFE0F','mountain'],['\u{1F30B}','volcano'],
+    ['\u{1F5FB}','mount fuji'],['\u{1F3D5}\uFE0F','camping'],['\u{1F3D6}\uFE0F','beach'],['\u{1F3DC}\uFE0F','desert'],['\u{1F3D7}\uFE0F','construction'],
+    ['\u{1F3DB}\uFE0F','classical'],['\u{1F3F0}','castle'],['\u{1F5FD}','statue liberty'],['\u{1F5FC}','tower'],['\u{1F309}','bridge night'],
+    ['\u2708\uFE0F','airplane'],['\u{1F681}','helicopter'],['\u{1F682}','train'],['\u{1F697}','car'],['\u{1F6A2}','ship'],
+    ['\u{1F6F8}','ufo'],['\u{1F30D}','earth africa'],['\u{1F30E}','earth americas'],['\u{1F30F}','earth asia'],['\u{1F310}','globe meridians'],
+  ],
+  'Box Drawing': [
+    ['\u2500','horizontal'],['\u2502','vertical'],['\u250C','top left'],['\u2510','top right'],['\u2514','bottom left'],
+    ['\u2518','bottom right'],['\u251C','left tee'],['\u2524','right tee'],['\u252C','top tee'],['\u2534','bottom tee'],
+    ['\u253C','cross'],['\u2550','double horiz'],['\u2551','double vert'],['\u2554','double top left'],['\u2557','double top right'],
+    ['\u255A','double bottom left'],['\u255D','double bottom right'],['\u2560','double left tee'],['\u2563','double right tee'],['\u2566','double top tee'],
+    ['\u2569','double bottom tee'],['\u256C','double cross'],['\u2580','upper half'],['\u2584','lower half'],['\u2588','full block'],
+    ['\u258C','left half'],['\u2590','right half'],['\u2591','light shade'],['\u2592','medium shade'],['\u2593','dark shade'],
+    ['\u25CF','filled circle'],['\u25CB','empty circle'],['\u25C6','filled diamond'],['\u25C7','empty diamond'],['\u25A0','filled square'],
+    ['\u25A1','empty square'],['\u25B2','up triangle'],['\u25BC','down triangle'],['\u25C0','left triangle'],['\u25B6','right triangle'],
+  ],
+  'Arrows': [
+    ['\u2192','right arrow'],['\u2190','left arrow'],['\u2191','up arrow'],['\u2193','down arrow'],['\u2194','left right'],
+    ['\u2195','up down'],['\u2197','upper right'],['\u2198','lower right'],['\u2199','lower left'],['\u2196','upper left'],
+    ['\u21D2','double right'],['\u21D0','double left'],['\u21D1','double up'],['\u21D3','double down'],['\u21D4','double left right'],
+    ['\u279C','heavy right'],['\u27A4','triangle right'],['\u25BA','play'],['\u25C4','reverse'],['\u23E9','fast forward'],
+    ['\u221E','infinity'],['\u2248','approx'],['\u2260','not equal'],['\u2264','less equal'],['\u2265','greater equal'],
+    ['\u00B1','plus minus'],['\u00D7','multiply'],['\u00F7','divide'],['\u2211','sum'],['\u220F','product'],
+    ['\u221A','square root'],['\u222B','integral'],['\u2202','partial'],['\u0394','delta'],['\u2207','nabla'],
+    ['\u03C0','pi'],['\u03BB','lambda'],['\u03A9','omega'],['\u03B1','alpha'],['\u03B2','beta'],
+  ],
+};
+
+// ── Segment Icon Picker (for custom-icon segments) ──────────────────────────
+let segIconPickerOpen = false;
+let segIconActiveTab = 'Tech';
+let segIconSearchTerm = '';
+
+// Inline input handler for seIconInput
+document.getElementById('seIconInput').addEventListener('input', function() {
+  if (!selectedSeg) return;
+  const seg = state.lines[selectedSeg.lineIdx].segments[selectedSeg.segIdx];
+  if (!seg || seg.type !== 'custom-icon') return;
+  seg.content = this.value;
+  render();
+});
+
+function toggleSegIconPicker() {
+  segIconPickerOpen = !segIconPickerOpen;
+  const el = document.getElementById('segIconPicker');
+  el.classList.toggle('open', segIconPickerOpen);
+  if (segIconPickerOpen) {
+    renderSegIconPicker();
+    document.getElementById('segIconSearch').focus();
+    setTimeout(() => document.addEventListener('click', closeSegIconPickerOutside), 0);
+  } else {
+    document.removeEventListener('click', closeSegIconPickerOutside);
+  }
+}
+
+function closeSegIconPickerOutside(e) {
+  const picker = document.getElementById('segIconPicker');
+  const btn = picker.previousElementSibling;
+  if (!picker.contains(e.target) && e.target !== btn) {
+    segIconPickerOpen = false;
+    picker.classList.remove('open');
+    document.removeEventListener('click', closeSegIconPickerOutside);
+  }
+}
+
+function renderSegIconPicker() {
+  const tabsEl = document.getElementById('segIconTabs');
+  tabsEl.innerHTML = Object.keys(ICON_CATEGORIES).map(cat =>
+    `<div class="icon-picker-tab ${cat===segIconActiveTab?'active':''}" onclick="event.stopPropagation(); setSegIconTab('${cat}')">${cat}</div>`
+  ).join('');
+  renderSegIconGrid();
+}
+
+function setSegIconTab(cat) {
+  segIconActiveTab = cat;
+  segIconSearchTerm = '';
+  document.getElementById('segIconSearch').value = '';
+  renderSegIconPicker();
+}
+
+function filterSegIcons(term) {
+  segIconSearchTerm = term.toLowerCase();
+  renderSegIconGrid();
+}
+
+function renderSegIconGrid() {
+  const grid = document.getElementById('segIconGrid');
+  let icons;
+  if (segIconSearchTerm) {
+    icons = [];
+    for (const cat of Object.values(ICON_CATEGORIES)) {
+      for (const [ch, name] of cat) {
+        if (name.includes(segIconSearchTerm) || ch === segIconSearchTerm) icons.push([ch, name]);
+      }
+    }
+  } else {
+    icons = ICON_CATEGORIES[segIconActiveTab] || [];
+  }
+  const currentIcon = selectedSeg ? (state.lines[selectedSeg.lineIdx]?.segments[selectedSeg.segIdx]?.content || '') : '';
+  grid.innerHTML = icons.map(([ch, name]) => {
+    const sel = currentIcon === ch ? 'selected' : '';
+    return `<div class="icon-cell ${sel}" title="${name}" onclick="event.stopPropagation(); pickSegIcon(this.textContent.trim())">${ch}</div>`;
+  }).join('');
+}
+
+function pickSegIcon(ch) {
+  if (!selectedSeg) return;
+  const seg = state.lines[selectedSeg.lineIdx].segments[selectedSeg.segIdx];
+  if (!seg || seg.type !== 'custom-icon') return;
+  seg.content = ch;
+  segIconPickerOpen = false;
+  document.getElementById('segIconPicker').classList.remove('open');
+  document.removeEventListener('click', closeSegIconPickerOutside);
+  render();
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+try {
+  if (localStorage.getItem('oml-nerdFont')) {
+    state.nerdFont = true;
+    loadNerdFont();
+    document.getElementById('preview').classList.add('nf-active');
+  }
+  const savedProxy = localStorage.getItem('oml-usageProxy');
+  if (savedProxy) state.usageProxy = savedProxy;
+} catch(e) {}
+applyPreset('builder');
+loadCustomManifest();
+
+// Sticky lines-wrap: shadow when stuck, only sticky when palette needs scroll
+{
+  const linesWrap = document.querySelector('.lines-wrap');
+  const sentinel = document.getElementById('linesSentinel');
+  const palette = document.querySelector('.palette-wrap');
+
+  function updateSticky() {
+    const paletteBottom = palette.getBoundingClientRect().bottom;
+    const needsSticky = paletteBottom > window.innerHeight;
+    const isStuck = sentinel.getBoundingClientRect().bottom <= 49;
+    linesWrap.style.position = needsSticky ? 'sticky' : 'relative';
+    linesWrap.classList.toggle('stuck', needsSticky && isStuck);
+  }
+
+  new IntersectionObserver(updateSticky, { threshold: 0 }).observe(sentinel);
+  new MutationObserver(updateSticky).observe(palette, { childList: true, subtree: true });
+  window.addEventListener('resize', updateSticky);
+}
+
+// ── WASM Engine Integration ─────────────────────────────────────────────────
+// Loads the Go WASM engine and uses it for preview rendering when available.
+// Falls back to the JS mock renderer if WASM fails to load.
+
+let wasmReady = false;
+let _cachedMockInputJSON = null;
+
+function ansiToHtml(ansi) {
+  // Parse ANSI escape sequences and convert to HTML spans
+  let html = '';
+  let i = 0;
+  let currentStyles = [];
+
+  let markerOpen = false;
+
+  while (i < ansi.length) {
+    if (ansi[i] === '\x1b' && ansi[i+1] === ']' && ansi[i+2] === '9' && ansi[i+3] === ';') {
+      // OSC segment marker: \x1b]9;L;S\x07
+      let j = i + 4;
+      while (j < ansi.length && ansi[j] !== '\x07') j++;
+      const parts = ansi.slice(i+4, j).split(';');
+      const lineI = parts[0] || '0';
+      const segI = parts[1] || '0';
+      i = j + 1;
+      if (markerOpen) html += '</span>';
+      html += `<span class="seg-click" data-line="${lineI}" data-seg="${segI}">`;
+      markerOpen = true;
+    } else if (ansi[i] === '\x1b' && ansi[i+1] === '[') {
+      // Parse escape sequence
+      let j = i + 2;
+      while (j < ansi.length && ansi[j] !== 'm') j++;
+      const codes = ansi.slice(i+2, j).split(';').map(Number);
+      i = j + 1;
+
+      let ci = 0;
+      while (ci < codes.length) {
+        const code = codes[ci];
+        if (code === 0) {
+          // Reset
+          for (let s = currentStyles.length - 1; s >= 0; s--) html += '</span>';
+          currentStyles = [];
+        } else if (code === 1) {
+          html += '<span style="font-weight:bold;">';
+          currentStyles.push('bold');
+        } else if (code === 2) {
+          html += '<span style="opacity:0.5;">';
+          currentStyles.push('dim');
+        } else if (code === 22) {
+          // Remove dim
+          const idx = currentStyles.lastIndexOf('dim');
+          if (idx >= 0) { html += '</span>'; currentStyles.splice(idx, 1); }
+        } else if (code === 38 && codes[ci+1] === 2) {
+          // 24-bit foreground
+          const r = codes[ci+2] || 0, g = codes[ci+3] || 0, b = codes[ci+4] || 0;
+          html += `<span style="color:rgb(${r},${g},${b});">`;
+          currentStyles.push('fg');
+          ci += 4;
+        } else if (code === 48 && codes[ci+1] === 2) {
+          // 24-bit background
+          const r = codes[ci+2] || 0, g = codes[ci+3] || 0, b = codes[ci+4] || 0;
+          html += `<span style="background:rgb(${r},${g},${b});">`;
+          currentStyles.push('bg');
+          ci += 4;
+        }
+        ci++;
+      }
+    } else if (ansi[i] === '\n') {
+      for (let s = currentStyles.length - 1; s >= 0; s--) html += '</span>';
+      currentStyles = [];
+      if (markerOpen) { html += '</span>'; markerOpen = false; }
+      html += '<br>';
+      i++;
+    } else {
+      // Escape HTML entities and preserve spaces
+      const ch = ansi[i];
+      if (ch === '<') html += '&lt;';
+      else if (ch === '>') html += '&gt;';
+      else if (ch === '&') html += '&amp;';
+      else if (ch === ' ') html += '\u00a0';
+      else html += ch;
+      i++;
+    }
+  }
+  for (let s = currentStyles.length - 1; s >= 0; s--) html += '</span>';
+  if (markerOpen) html += '</span>';
+  return html;
+}
+
+function getPreviewCharWidth() {
+  var el = document.getElementById('preview');
+  if (!el) return 120;
+  // Measure monospace character width using a hidden span
+  var span = document.createElement('span');
+  span.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-family:inherit;font-size:inherit;';
+  span.textContent = 'M';
+  el.appendChild(span);
+  var charW = span.getBoundingClientRect().width || 7.2;
+  el.removeChild(span);
+  var containerW = el.clientWidth - 40; // subtract padding
+  return Math.floor(containerW / charW) || 120;
+}
+
+function renderLineWasm(li) {
+  if (!wasmReady || typeof omlRender !== 'function' || !_cachedMockInputJSON) return null;
+  var fullCfg = buildConfig();
+  var singleLine = fullCfg['oh-my-lines'][li];
+  if (!singleLine) return null;
+  var cfg = { 'oh-my-lines': [singleLine] };
+  if (fullCfg.nerdFont) cfg.nerdFont = true;
+  try {
+    var ansi = omlRender(JSON.stringify(cfg), _cachedMockInputJSON, getPreviewCharWidth());
+    if (!ansi) return null;
+    return ansiToHtml(ansi);
+  } catch(e) { return null; }
+}
+
+function upgradeLinePreviewWasm() {
+  try {
+    if (!wasmReady || !_cachedMockInputJSON) return;
+    var lp = document.querySelector('.line-preview');
+    if (!lp) return;
+    var li = activeLineTab;
+    var line = state.lines[li];
+    if (!line || line.segments.length === 0) return;
+    var html = renderLineWasm(li);
+    if (html) {
+      lp.innerHTML = html;
+      addLinePreviewIndicator(lp, li);
+    }
+  } catch(e) {}
+}
+
+function renderPreviewWasm() {
+  if (!wasmReady || typeof omlRender !== 'function') return false;
+
+  const cfg = buildConfig();
+  // ANSI helper: \x1b[ escape sequences for mock runtime data
+  const ESC = '\x1b[';
+  const RST = ESC + '0m';
+  const BOLD = ESC + '1m';
+  const DIM = ESC + '2m';
+  function hexFG(hex) {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return ESC + '38;2;' + r + ';' + g + ';' + b + 'm';
+  }
+
+  // Build mock rate limit bars (matches Go datasource output)
+  function mockBar(pct, color, label, barStyle, resetStr) {
+    const w = 6, filled = Math.round(pct / 100 * w);
+    const fc = barStyle === 'block' ? '\u2593' : '\u25cf'; // ▓ or ●
+    const ec = barStyle === 'block' ? '\u2591' : '\u25cb'; // ░ or ○
+    const fg = hexFG(color);
+    const white = hexFG('#dcdcdc');
+    const cyan = hexFG('#2e9599');
+    let bar = fg;
+    for (let i = 0; i < w; i++) bar += (i < filled ? fc : ec);
+    let out = white + label + RST + ' ' + bar + RST + ' ' + cyan + Math.round(pct) + '%' + RST;
+    if (resetStr) out += ' ' + DIM + '@' + resetStr + RST;
+    return out;
+  }
+
+  // Detect barStyle and showReset from config segments
+  const _barStyles = {}, _showResets = {};
+  (cfg['oh-my-lines'] || []).forEach(function(line) {
+    (line.segments || []).forEach(function(seg) {
+      if (seg.type && seg.type.startsWith('rate-')) {
+        if (seg.barStyle) _barStyles[seg.type] = seg.barStyle;
+        if (seg.showReset !== undefined) _showResets[seg.type] = seg.showReset;
+      }
+    });
+  });
+
+  const mockInput = {
+    model: { display_name: 'Claude Opus 4.6', id: 'claude-opus-4-6' },
+    context_window: {
+      context_window_size: 200000,
+      current_usage: { input_tokens: 65000, cache_creation_input_tokens: 8000, cache_read_input_tokens: 4000, output_tokens: 1500 },
+      total_input_tokens: 120000, total_output_tokens: 25000
+    },
+    cwd: '/home/user/myproject',
+    version: '1.0.5',
+    cost: { total_cost_usd: 1.75, total_duration_ms: 240000, total_api_duration_ms: 144000, total_lines_added: 35, total_lines_removed: 12 },
+    exceeds_200k_tokens: false,
+    vim: { mode: 'NORMAL' },
+    agent: { name: '' },
+    worktree: { name: '', branch: '' },
+    runtime: {
+      burn_rate_min: 2100, burn_rate_hr: 126000, burn_elapsed: 120, burn_has_data: true,
+      rate_session: mockBar(42, '#00a000', '5h', _barStyles['rate-session'], (_showResets['rate-session'] !== false) ? '11:00am' : ''),
+      rate_weekly: mockBar(28, '#00a000', '7d', _barStyles['rate-weekly'], (_showResets['rate-weekly'] === true) ? 'mar 10, 3:00am' : ''),
+      rate_extra: '',
+      rate_opus: mockBar(35, '#7c3aed', 'opus', _barStyles['rate-opus'], (_showResets['rate-opus'] === true) ? 'mar 10' : ''),
+      session_pct: 42, weekly_pct: 28, rate_has_data: true,
+      burn_spark: hexFG('#e6c800') + '▁▃▅▇█▆▄▂' + RST,
+      ctx_spark: hexFG('#ffb055') + '▂▃▅▆▇▇█▇' + RST,
+      rate_spark: hexFG('#00a000') + '▃▅▆▇▇█▆▅' + RST,
+      ctx_target: hexFG('#00a000') + '▂▃▅' + RST + hexFG('#e6c800') + '▆▇' + RST + hexFG('#ff5555') + '█' + RST,
+      rate_target: hexFG('#00a000') + '▃▅▆' + RST + hexFG('#e6c800') + '▇▇' + RST + hexFG('#ff5555') + '█' + RST,
+      eta_session: DIM + '~2h 15m' + RST,
+      eta_session_min: DIM + '~135m' + RST,
+      eta_session_hr: DIM + '~2.3h' + RST,
+      eta_weekly: DIM + '~4d 8h' + RST,
+      eta_weekly_min: DIM + '~6,240m' + RST,
+      eta_weekly_hr: DIM + '~104h' + RST,
+      cost_ctx: hexFG('#e6c800') + '$1.75' + RST,
+      cost_min: hexFG('#e6c800') + '$0.44/min' + RST,
+      cost_hr: hexFG('#e6c800') + '$26.25/hr' + RST,
+      cost_7d: hexFG('#e6c800') + '$18.50' + RST,
+      cost_spark: hexFG('#e6c800') + '▂▃▅▆▇█▅▃' + RST,
+      gh_pr: hexFG('#2e9599') + 'PR #42' + RST + ' ' + hexFG('#00a000') + '✓' + RST,
+      gh_checks: hexFG('#00a000') + '✓ 8/8' + RST,
+      gh_reviews: hexFG('#00a000') + '2 approved' + RST,
+      gh_actions: hexFG('#00a000') + '✓ passing' + RST,
+      gh_notifs: hexFG('#e6c800') + '3 🔔' + RST,
+      gh_issues: hexFG('#ff5555') + '5 open' + RST,
+      gh_pr_count: hexFG('#2e9599') + '3 PRs' + RST,
+      gh_pr_comments: DIM + '12 comments' + RST,
+      gh_stars: hexFG('#e6c800') + '★ 142' + RST,
+      docker: hexFG('#2e9599') + '3/3 ✓' + RST,
+      docker_db: hexFG('#2e9599') + 'pg ✓' + RST
+    }
+  };
+
+  try {
+    _cachedMockInputJSON = JSON.stringify(mockInput);
+    const ansi = omlRender(JSON.stringify(cfg), _cachedMockInputJSON, getPreviewCharWidth());
+    const el = document.getElementById('preview');
+    const hr = '<span class="line" style="display:block;border-bottom:1px solid var(--border);opacity:0.5;height:0;line-height:0;margin:3px 0;"></span>';
+    const prompt = '<span class="line" style="display:block;color:var(--muted);opacity:0.5;">\u276f <span style="background:var(--muted);color:#000;opacity:0.6;">&nbsp;</span></span>';
+    const linesHtml = ansiToHtml(ansi);
+    el.innerHTML = hr + prompt + hr + '<span class="line" style="display:block;">' + linesHtml + '</span>';
+    // Delegated click handler for segment markers
+    el.onclick = function(e) {
+      const seg = e.target.closest('.seg-click');
+      if (!seg) return;
+      const li = parseInt(seg.dataset.line);
+      const si = parseInt(seg.dataset.seg);
+      setActiveLineTab(li);
+      selectSeg(li, si);
+    };
+    return true;
+  } catch (e) {
+    console.warn('WASM render failed, falling back to JS:', e);
+    return false;
+  }
+}
+
+// Monkey-patch renderPreview to try WASM first
+const _originalRenderPreview = renderPreview;
+renderPreview = function() {
+  if (!renderPreviewWasm()) {
+    _originalRenderPreview();
+  }
+};
+
+// Load WASM
+(async function loadWasm() {
+  try {
+    if (!WebAssembly) return;
+    const go = new Go();
+    const wasmPath = './engine/renderer.wasm';
+    const result = await WebAssembly.instantiateStreaming(fetch(wasmPath), go.importObject);
+    go.run(result.instance);
+    wasmReady = true;
+    renderPreview();
+    console.log('WASM engine loaded');
+  } catch (e) {
+    console.log('WASM not available, using JS mock:', e.message);
+  }
+})();
+</script>
+</body>
+</html>
