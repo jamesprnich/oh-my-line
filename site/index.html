@@ -1482,7 +1482,7 @@ function paletteSelectTab(cat) {
   paletteActiveTab = cat;
   paletteActiveSeg = null;
   document.querySelectorAll('.palette-tab').forEach(function(t) {
-    t.classList.toggle('active', t.textContent.indexOf(cat) === 0);
+    t.classList.toggle('active', t.textContent.replace(/[0-9]/g, '').trim() === cat);
   });
   paletteRenderChips();
   document.getElementById('palette-info').classList.remove('visible');
