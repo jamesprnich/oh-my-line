@@ -223,6 +223,118 @@ func TestParse_EmptyConfig(t *testing.T) {
 	}
 }
 
+// ── Security: Trusted config flag ────────────────────────────────────────────
+// Only ~/.oh-my-line/config.json is trusted (can run command segments).
+// Project-level oh-my-line.json must NEVER be trusted — a cloned repo could
+// contain malicious command segments that execute arbitrary code.
+
+func TestLoad_ProjectConfigIsUntrusted(t *testing.T) {
+	dir := t.TempDir()
+	configJSON := `{"oh-my-lines": [{"segments": [{"type": "command", "content": "echo pwned"}]}]}`
+	os.WriteFile(filepath.Join(dir, "oh-my-line.json"), []byte(configJSON), 0644)
+
+	conf, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if conf.Trusted {
+		t.Fatal("SECURITY: project-level config must NOT be trusted — command segments could execute arbitrary code")
+	}
+}
+
+func TestLoad_ProjectConfigCommandSegmentBlocked(t *testing.T) {
+	// End-to-end: a project config with a command segment should parse but
+	// the Trusted flag must be false, ensuring the render layer blocks execution.
+	dir := t.TempDir()
+	configJSON := `{"oh-my-lines": [{"segments": [
+		{"type": "command", "content": "rm -rf /"},
+		{"type": "model"}
+	]}]}`
+	os.WriteFile(filepath.Join(dir, "oh-my-line.json"), []byte(configJSON), 0644)
+
+	conf, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if conf.Trusted {
+		t.Fatal("SECURITY: project config with command segments must not be trusted")
+	}
+	// Verify the command segment is still in the config (it's not stripped,
+	// just blocked at render time via the Trusted flag)
+	found := false
+	for _, line := range conf.Lines {
+		for _, seg := range line.Segments {
+			if seg.Type == "command" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Error("command segment should still be in parsed config (blocked at render, not parse)")
+	}
+}
+
+func TestLoad_GlobalConfigIsTrusted(t *testing.T) {
+	// We can't easily test the real ~/.oh-my-line/config.json path in a unit test,
+	// but we verify the loader's candidate list logic: the global path gets trusted=true.
+	// This test creates a config at the global path in a temp HOME.
+	origHome := os.Getenv("HOME")
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	globalDir := filepath.Join(tmpHome, ".oh-my-line")
+	os.MkdirAll(globalDir, 0755)
+	configJSON := `{"oh-my-lines": [{"segments": [{"type": "command", "content": "date"}]}]}`
+	os.WriteFile(filepath.Join(globalDir, "config.json"), []byte(configJSON), 0644)
+
+	// Load with a cwd that has no config — should fall back to global
+	conf, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if !conf.Trusted {
+		t.Fatal("SECURITY: global config (~/.oh-my-line/config.json) must be trusted")
+	}
+}
+
+func TestLoad_ProjectConfigTakesPriorityButStaysUntrusted(t *testing.T) {
+	// When both project and global configs exist, project wins but must be untrusted.
+	origHome := os.Getenv("HOME")
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	// Create global config (trusted)
+	globalDir := filepath.Join(tmpHome, ".oh-my-line")
+	os.MkdirAll(globalDir, 0755)
+	os.WriteFile(filepath.Join(globalDir, "config.json"), []byte(`{"oh-my-lines": [{"segments": [{"type": "model"}]}]}`), 0644)
+
+	// Create project config (untrusted)
+	projectDir := t.TempDir()
+	os.WriteFile(filepath.Join(projectDir, "oh-my-line.json"), []byte(`{"oh-my-lines": [{"segments": [{"type": "command", "content": "echo attack"}]}]}`), 0644)
+
+	conf, err := Load(projectDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if conf.Trusted {
+		t.Fatal("SECURITY: project config must NOT be trusted even when global config also exists")
+	}
+	// Verify it loaded the project config (has command segment), not the global one
+	hasCommand := false
+	for _, line := range conf.Lines {
+		for _, seg := range line.Segments {
+			if seg.Type == "command" {
+				hasCommand = true
+			}
+		}
+	}
+	if !hasCommand {
+		t.Error("should have loaded project config (with command segment), not global")
+	}
+}
+
 func TestLoadWithProduct_SpecCompliant(t *testing.T) {
 	// Create temp dir with oh-my-line.json and .product.json
 	dir := t.TempDir()
