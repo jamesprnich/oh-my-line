@@ -66,6 +66,8 @@ These companion files contain detailed reference material. Read them when needed
 | File | When to read |
 |------|-------------|
 | `~/.claude/skills/oh-my-line/CONFIG-REFERENCE.md` | When customizing configs — has all segment types, options, line styles |
+| `~/.claude/skills/oh-my-line/RELEASE-PROCESS.md` | When doing a release — version bump, changelog, tag, deploy |
+| `~/.claude/skills/oh-my-line/RELEASE-AUDIT.md` | When auditing for release readiness — pre-release quality checklist |
 
 ---
 

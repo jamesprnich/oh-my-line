@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.1] — 2026-03-09
+
+### Fixes
+- Add `max` effort level support for Opus 4.6 (red-orange indicator)
+- Cap ETA at window remaining — shows `>5h`/`>7d` instead of absurd values
+- Disable Nerd Font icons by default in builder presets
+- Pin Nerd Font CDN to v3.3.0, add local font name fallback
+- Fix builder Site nav link (`/site/` → `/`)
+- Fix palette tab where "Git" also highlighted "GitHub"
+
+### Infrastructure
+- Add release workflow for automated binary builds on tag push
+- Add RELEASE-PROCESS.md and RELEASE-AUDIT.md to skill sub-specs
+
 ## [0.10.0] — 2026-03-07
 
 First public release. Compiled Go binary — no shell dependencies beyond `curl` and `bash` for the installer.
