@@ -35,13 +35,27 @@ func ComputeETAs(sessionPctRaw, weeklyPctRaw float64, sessionReset, weeklyReset 
 
 	now := time.Now().Unix()
 
+	// Compute remaining minutes in each window for capping ETAs
+	sessionRemainMins := -1
+	weeklyRemainMins := -1
+	if sessionReset != "" && sessionReset != "null" {
+		if ep := isoToEpoch(sessionReset); ep > 0 {
+			sessionRemainMins = int(ep-now) / 60
+		}
+	}
+	if weeklyReset != "" && weeklyReset != "null" {
+		if ep := isoToEpoch(weeklyReset); ep > 0 {
+			weeklyRemainMins = int(ep-now) / 60
+		}
+	}
+
 	// Method 1: Window average
 	if sessionReset != "" && sessionReset != "null" {
 		if ep := isoToEpoch(sessionReset); ep > 0 {
 			winElapsed := int(now - (ep - int64(shortSecs)))
 			if winElapsed > 60 {
 				if mins := etaMins(sessionPctRaw, 0, winElapsed); mins > 0 {
-					result.Session = render.FormatDuration(mins)
+					result.Session = capETA(mins, sessionRemainMins, shortLabel)
 				}
 			}
 		}
@@ -51,7 +65,7 @@ func ComputeETAs(sessionPctRaw, weeklyPctRaw float64, sessionReset, weeklyReset 
 			winElapsed := int(now - (ep - int64(longSecs)))
 			if winElapsed > 60 {
 				if mins := etaMins(weeklyPctRaw, 0, winElapsed); mins > 0 {
-					result.Weekly = render.FormatDuration(mins)
+					result.Weekly = capETA(mins, weeklyRemainMins, longLabel)
 				}
 			}
 		}
@@ -63,10 +77,10 @@ func ComputeETAs(sessionPctRaw, weeklyPctRaw float64, sessionReset, weeklyReset 
 		age := int(now - state.epoch)
 		if age >= 120 {
 			if mins := etaMins(sessionPctRaw, state.sessionPct, age); mins > 0 {
-				result.SessionMin = render.FormatDuration(mins)
+				result.SessionMin = capETA(mins, sessionRemainMins, shortLabel)
 			}
 			if mins := etaMins(weeklyPctRaw, state.weeklyPct, age); mins > 0 {
-				result.WeeklyMin = render.FormatDuration(mins)
+				result.WeeklyMin = capETA(mins, weeklyRemainMins, longLabel)
 			}
 		}
 		if age >= 300 || sessionPctRaw+5 < state.sessionPct {
@@ -82,10 +96,10 @@ func ComputeETAs(sessionPctRaw, weeklyPctRaw float64, sessionReset, weeklyReset 
 		age := int(now - state.epoch)
 		if age >= 600 {
 			if mins := etaMins(sessionPctRaw, state.sessionPct, age); mins > 0 {
-				result.SessionHr = render.FormatDuration(mins)
+				result.SessionHr = capETA(mins, sessionRemainMins, shortLabel)
 			}
 			if mins := etaMins(weeklyPctRaw, state.weeklyPct, age); mins > 0 {
-				result.WeeklyHr = render.FormatDuration(mins)
+				result.WeeklyHr = capETA(mins, weeklyRemainMins, longLabel)
 			}
 		}
 		if age >= 3600 || sessionPctRaw+5 < state.sessionPct {
@@ -96,6 +110,15 @@ func ComputeETAs(sessionPctRaw, weeklyPctRaw float64, sessionReset, weeklyReset 
 	}
 
 	return result
+}
+
+// capETA returns the formatted duration, or ">5h"/">7d" if the ETA exceeds
+// the remaining window time (meaning you won't hit the limit this window).
+func capETA(etaMins, windowRemainMins int, windowLabel string) string {
+	if windowRemainMins >= 0 && etaMins > windowRemainMins {
+		return ">" + windowLabel
+	}
+	return render.FormatDuration(etaMins)
 }
 
 // RenderETASegment renders an ETA segment with window label.

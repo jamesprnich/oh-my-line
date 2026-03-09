@@ -713,6 +713,8 @@ func renderEffort(pre, post string) string {
 		level = "low"
 	case "med", "medium":
 		level = "med"
+	case "max":
+		level = "max"
 	default:
 		level = "high"
 	}
@@ -722,6 +724,8 @@ func renderEffort(pre, post string) string {
 		ec = HexFG("#888888")
 	case "med":
 		ec = HexFG("#ffb055")
+	case "max":
+		ec = HexFG("#ff4500")
 	default:
 		ec = HexFG("#00a000")
 	}
