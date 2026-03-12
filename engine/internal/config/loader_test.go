@@ -224,7 +224,7 @@ func TestParse_EmptyConfig(t *testing.T) {
 }
 
 // ── Security: Trusted config flag ────────────────────────────────────────────
-// Only ~/.oh-my-line/config.json is trusted (can run command segments).
+// Trusted paths: config.json sibling of the running binary, ~/.oh-my-line/config.json.
 // Project-level oh-my-line.json must NEVER be trusted — a cloned repo could
 // contain malicious command segments that execute arbitrary code.
 
@@ -295,6 +295,29 @@ func TestLoad_GlobalConfigIsTrusted(t *testing.T) {
 	}
 	if !conf.Trusted {
 		t.Fatal("SECURITY: global config (~/.oh-my-line/config.json) must be trusted")
+	}
+}
+
+func TestLoad_ExecutableSiblingConfigIsTrusted(t *testing.T) {
+	// The loader adds config.json next to the running binary as a trusted candidate.
+	// We verify this by placing a config.json alongside the test binary itself.
+	exe, err := os.Executable()
+	if err != nil {
+		t.Skip("cannot determine executable path")
+	}
+	configPath := filepath.Join(filepath.Dir(exe), "config.json")
+	configJSON := `{"oh-my-lines": [{"segments": [{"type": "command", "content": "date"}]}]}`
+	if err := os.WriteFile(configPath, []byte(configJSON), 0644); err != nil {
+		t.Skipf("cannot write sibling config: %v", err)
+	}
+	defer os.Remove(configPath)
+
+	conf, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if !conf.Trusted {
+		t.Fatal("SECURITY: config.json sibling of the binary must be trusted")
 	}
 }
 

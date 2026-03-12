@@ -11,7 +11,7 @@ import (
 )
 
 // Load finds and parses the oh-my-line config file.
-// Priority: cwd/oh-my-line.json > ~/.oh-my-line/config.json
+// Priority: cwd/oh-my-line.json > config.json sibling of the running binary > ~/.oh-my-line/config.json
 func Load(cwd string) (*internal.Config, error) {
 	home, _ := os.UserHomeDir()
 
@@ -24,6 +24,13 @@ func Load(cwd string) (*internal.Config, error) {
 	if cwd != "" {
 		candidates = append(candidates, candidate{filepath.Join(cwd, "oh-my-line.json"), false})
 	}
+
+	// Sibling config: config.json next to the running binary (e.g. ~/.oh-my-line-hd/config.json).
+	// This works regardless of how the binary was launched or whether CLAUDE_CONFIG_DIR is set.
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, candidate{filepath.Join(filepath.Dir(exe), "config.json"), true})
+	}
+
 	if home != "" {
 		candidates = append(candidates, candidate{filepath.Join(home, ".oh-my-line", "config.json"), true})
 	}
