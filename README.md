@@ -2,9 +2,9 @@
 
 A real-time statusline engine for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Possibly useful elsewhere too.
 
-**[jamesprnich.github.io/oh-my-line](https://jamesprnich.github.io/oh-my-line/)** — homepage, docs, config builder.
-
 ![oh-my-line preview](examples/oh-my-line-preview.png)
+
+[Homepage](https://jamesprnich.github.io/oh-my-line/) | [Docs](https://jamesprnich.github.io/oh-my-line/docs/) | [Config Builder](https://jamesprnich.github.io/oh-my-line/builder.html)
 
 ## Install
 
