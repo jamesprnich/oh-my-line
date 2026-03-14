@@ -14,6 +14,14 @@ curl -fsSL https://raw.githubusercontent.com/jamesprnich/oh-my-line/main/install
 
 That's it. The statusline appears at the bottom of Claude Code on next launch.
 
+## Upgrade
+
+Re-run the same command — the installer detects your existing version and upgrades in place. Your config is preserved.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jamesprnich/oh-my-line/main/install.sh | bash
+```
+
 ## Customize
 
 Use the [Config Builder](https://jamesprnich.github.io/oh-my-line/builder.html) to drag-and-drop your layout, then paste the JSON into `~/.oh-my-line/config.json` or a project-level `oh-my-line.json`.

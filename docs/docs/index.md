@@ -29,6 +29,14 @@ The installer:
 
 The statusline appears at the bottom of Claude Code on next launch.
 
+### Upgrade
+
+Re-run the same install command — the installer detects your existing version and upgrades in place. Your config is preserved.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jamesprnich/oh-my-line/main/install.sh | bash
+```
+
 ??? note "Manual install"
 
     Run the installer or build from source (`go build -o oh-my-line`), then place the binary and supporting files in `~/.oh-my-line/`. Add to Claude Code's user global settings (`~/.claude/settings.json`):
