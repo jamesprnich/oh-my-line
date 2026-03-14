@@ -18,7 +18,8 @@ type credentialFile struct {
 
 // GetOAuthToken resolves the OAuth token from the environment, keychain,
 // credentials file, or GNOME keyring.
-func GetOAuthToken() string {
+// configDir is the resolved CLAUDE_CONFIG_DIR path (e.g. ~/.claude).
+func GetOAuthToken(configDir string) string {
 	// 1. Environment variable
 	if t := os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"); t != "" {
 		debug.Log("oauth", "source=env")
@@ -39,9 +40,8 @@ func GetOAuthToken() string {
 	}
 
 	// 3. Credentials file (must be owner-only permissions)
-	home, _ := os.UserHomeDir()
-	if home != "" {
-		credPath := filepath.Join(home, ".claude", ".credentials.json")
+	if configDir != "" {
+		credPath := filepath.Join(configDir, ".credentials.json")
 		if fi, err := os.Stat(credPath); err == nil {
 			if fi.Mode().Perm()&0077 != 0 {
 				debug.Log("oauth", "credentials file has insecure permissions %o, skipping", fi.Mode().Perm())

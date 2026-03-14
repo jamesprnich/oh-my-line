@@ -137,3 +137,109 @@ func TestReadWindowFile_NonExistent(t *testing.T) {
 		t.Error("non-existent window file should return error")
 	}
 }
+
+// ── AccountKey ──
+
+func TestAccountKey_EmptyIsDefault(t *testing.T) {
+	if got := AccountKey(""); got != "default" {
+		t.Errorf("AccountKey(\"\") = %q, want \"default\"", got)
+	}
+}
+
+func TestAccountKey_HomeDotClaudeIsDefault(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home dir")
+	}
+	if got := AccountKey(filepath.Join(home, ".claude")); got != "default" {
+		t.Errorf("AccountKey(~/.claude) = %q, want \"default\"", got)
+	}
+}
+
+func TestAccountKey_HomeDotClaudeTrailingSlashIsDefault(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home dir")
+	}
+	if got := AccountKey(filepath.Join(home, ".claude") + "/"); got != "default" {
+		t.Errorf("AccountKey(~/.claude/) = %q, want \"default\"", got)
+	}
+}
+
+func TestAccountKey_CustomPathProducesHash(t *testing.T) {
+	got := AccountKey("/home/user/.claude-work")
+	if got == "default" {
+		t.Error("custom path should not be \"default\"")
+	}
+	if len(got) != 8 {
+		t.Errorf("hash should be 8 hex chars, got %q (len %d)", got, len(got))
+	}
+}
+
+func TestAccountKey_Deterministic(t *testing.T) {
+	a := AccountKey("/custom/path")
+	b := AccountKey("/custom/path")
+	if a != b {
+		t.Errorf("same input should produce same key: %q vs %q", a, b)
+	}
+}
+
+func TestAccountKey_DifferentPathsDifferentKeys(t *testing.T) {
+	a := AccountKey("/path/a")
+	b := AccountKey("/path/b")
+	if a == b {
+		t.Errorf("different paths should produce different keys: both %q", a)
+	}
+}
+
+// ── AccountDir ──
+
+func TestAccountDir_DefaultReturnsBase(t *testing.T) {
+	base, err := Dir()
+	if err != nil {
+		t.Fatalf("Dir() failed: %v", err)
+	}
+	got, err := AccountDir("default")
+	if err != nil {
+		t.Fatalf("AccountDir(\"default\") failed: %v", err)
+	}
+	if got != base {
+		t.Errorf("AccountDir(\"default\") = %q, want %q", got, base)
+	}
+}
+
+func TestAccountDir_EmptyReturnsBase(t *testing.T) {
+	base, err := Dir()
+	if err != nil {
+		t.Fatalf("Dir() failed: %v", err)
+	}
+	got, err := AccountDir("")
+	if err != nil {
+		t.Fatalf("AccountDir(\"\") failed: %v", err)
+	}
+	if got != base {
+		t.Errorf("AccountDir(\"\") = %q, want %q", got, base)
+	}
+}
+
+func TestAccountDir_CustomCreatesSubdir(t *testing.T) {
+	got, err := AccountDir("a1b2c3d4")
+	if err != nil {
+		t.Fatalf("AccountDir(\"a1b2c3d4\") failed: %v", err)
+	}
+	base, _ := Dir()
+	want := filepath.Join(base, "acct-a1b2c3d4")
+	if got != want {
+		t.Errorf("AccountDir(\"a1b2c3d4\") = %q, want %q", got, want)
+	}
+	fi, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("account dir should exist: %v", err)
+	}
+	if !fi.IsDir() {
+		t.Error("account dir should be a directory")
+	}
+	if fi.Mode().Perm() != 0700 {
+		t.Errorf("account dir perms = %o, want 0700", fi.Mode().Perm())
+	}
+}

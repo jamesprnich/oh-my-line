@@ -1,5 +1,6 @@
 {
   "icon": "🚀",
   "name": "oh-my-line",
-  "tagline": "Built with Claude Code"
+  "tagline": "Built with Claude Code",
+  "backgroundColor": "#2563eb"
 }

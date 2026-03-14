@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.11.0] — 2026-03-13
+
+### Multi-account support
+
+When multiple Claude Code accounts run simultaneously via `CLAUDE_CONFIG_DIR`, each account now gets fully isolated state — no cross-contamination of cache, OAuth tokens, cost tracking, or settings.
+
+**Runtime isolation** — Automatic, zero-config. The engine derives an account key from `CLAUDE_CONFIG_DIR` via SHA-256 hash and creates per-account cache subdirectories:
+
+- Burn rate tracking — per-account token consumption
+- Rate limit cache — per-account usage limits and background fetches
+- ETA projections — per-account time-to-limit forecasts
+- Sparkline history — per-account time series data
+- Cost tracking — per-account daily cost logs (`~/.oh-my-line/cost/acct-{key}/`)
+- OAuth tokens — credentials resolved from account's own config directory
+- Settings — effort level read from account's `settings.json`
+
+Shared data (version cache, GitHub, Docker, command segments) remains in the base cache directory.
+
+**Per-account config** — Optional. Place `oh-my-line.json` in the account's `CLAUDE_CONFIG_DIR` for a custom statusline layout per account. New config lookup order:
+
+1. `{cwd}/oh-my-line.json` — project config (untrusted)
+2. `{CLAUDE_CONFIG_DIR}/oh-my-line.json` — per-account config (trusted)
+3. `~/.oh-my-line/config.json` — global config (trusted)
+
+Step 2 is skipped when `CLAUDE_CONFIG_DIR` is unset or is the default (`~/.claude`). Default account behavior is completely unchanged — zero-migration upgrade.
+
+### Tests
+
+- 42 new tests: account key derivation, directory isolation, OAuth scoping, multi-account isolation for burn/cost/sparkline/rate-limits, per-account config loading with trust/priority/edge cases, security properties, integration tests
+- Total test count: 269 (up from 227)
+
+### Documentation
+
+- Config reference: multi-account setup section with isolation tables, per-account config example
+- Troubleshooting: multi-account issues table, per-account cache diagnostics, updated temp files tables (shared vs account-scoped), OAuth chain scoped to CLAUDE_CONFIG_DIR
+- Skill file: updated config lookup table, install locations, cache diagnostics
+- Release audit checklist: rewritten for Go engine (replaced stale bash-era references)
+
 ## [0.10.1] — 2026-03-09
 
 ### Fixes

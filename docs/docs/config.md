@@ -1,15 +1,18 @@
 # Config Reference
 
-Configuration lives in `oh-my-line.json`. The engine checks your working directory first, then falls back to `~/.oh-my-line/config.json`.
+Configuration lives in `oh-my-line.json`. The engine checks your working directory first, then per-account config (if `CLAUDE_CONFIG_DIR` is set), then falls back to `~/.oh-my-line/config.json`.
 
 Product identity (icon, label, tagline) is set inline on each segment via the `content` field. Optionally, you can reference a shared `.product.json` file via `source: ".product.json"` — see [Product identity segments](#product-identity-segments) below.
 
 ## Config lookup order
 
 ```
-1. {cwd}/oh-my-line.json        ← project config
-2. ~/.oh-my-line/config.json    ← global config
+1. {cwd}/oh-my-line.json                    ← project config (untrusted)
+2. {CLAUDE_CONFIG_DIR}/oh-my-line.json       ← per-account config (trusted)
+3. ~/.oh-my-line/config.json                 ← global config (trusted)
 ```
+
+Step 2 is skipped when `CLAUDE_CONFIG_DIR` is unset or is the default (`~/.claude`). See [Multi-account setup](#multi-account-setup) for details.
 
 If no config file is found anywhere, the statusline shows just the model name.
 
@@ -220,9 +223,78 @@ Use per-project `oh-my-line.json` files for different configurations with a shar
 
 The engine finds the nearest config by checking the current working directory first, then the global path. Each project can have its own segments and layout while sharing the same engine installation.
 
-!!! warning "Command segments are global-only"
+## Multi-account setup
 
-    `command` segments only execute from the trusted global config (`~/.oh-my-line/config.json`). Project-level configs cannot run shell commands — this prevents cloned repos from executing arbitrary code on your machine.
+If you run multiple Claude Code accounts simultaneously using `CLAUDE_CONFIG_DIR`, oh-my-line automatically isolates per-account state so sessions never cross-contaminate.
+
+**No configuration needed** — the engine detects `CLAUDE_CONFIG_DIR` and creates separate cache subdirectories automatically. Optionally, each account can have its own statusline config.
+
+### How it works
+
+The engine derives an account key from `CLAUDE_CONFIG_DIR` via SHA-256 hash. The default account (`~/.claude` or unset) uses the base cache path unchanged — zero behavior change for single-account users.
+
+**Runtime state** (cache, cost) is isolated per account automatically:
+
+```
+/tmp/claude-{uid}/                     ← default account (base path)
+/tmp/claude-{uid}/acct-{hash}/         ← additional accounts
+~/.oh-my-line/cost/                    ← default account cost data
+~/.oh-my-line/cost/acct-{hash}/        ← additional account cost data
+```
+
+**Config** can optionally be customized per account by placing `oh-my-line.json` in the account's config directory:
+
+```
+{CLAUDE_CONFIG_DIR}/oh-my-line.json    ← per-account config (trusted)
+```
+
+This is checked after the project config but before the global fallback. If no per-account config exists, the global `~/.oh-my-line/config.json` is used. The per-account config is trusted (can run `command` segments) because the user controls their own config directory.
+
+### What's isolated per account
+
+| Data | Why |
+|------|-----|
+| Burn rate tracking | Token consumption rate is per-session |
+| Rate limit cache | Each account has its own usage limits |
+| ETA projections | Derived from per-account consumption |
+| Sparkline history | Per-account time series data |
+| Cost tracking | Daily cost logs are per-account |
+| OAuth tokens | Credentials read from account's config directory |
+| Settings (effort level) | Read from account's `settings.json` |
+
+### What's shared across accounts
+
+| Data | Why |
+|------|-----|
+| Claude Code version | Same binary regardless of account |
+| GitHub PR/issue data | Repo-scoped, not account-scoped |
+| Docker container status | Machine-scoped, not account-scoped |
+| Command segment output | Command-scoped, not account-scoped |
+
+### Per-account config example
+
+```
+~/.oh-my-line/config.json                 ← global default (all accounts)
+~/.claude-work/oh-my-line.json            ← work account only
+```
+
+Terminal 1 (default account — uses global config):
+
+```bash
+claude
+```
+
+Terminal 2 (work account — uses per-account config + isolated state):
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-work claude
+```
+
+Both sessions render their own rate limits, burn rates, and ETAs independently. The work account can have a completely different statusline layout.
+
+!!! warning "Command segments require a trusted config"
+
+    `command` segments only execute from trusted configs — `~/.oh-my-line/config.json` (global) and `{CLAUDE_CONFIG_DIR}/oh-my-line.json` (per-account). Project-level configs cannot run shell commands — this prevents cloned repos from executing arbitrary code on your machine.
 
 ## Usage proxy
 
@@ -276,4 +348,4 @@ Logs are written to `~/.oh-my-line/debug.log` and auto-truncated at 100KB.
 
 ## Security: trusted configs
 
-Only `~/.oh-my-line/config.json` is trusted to run shell commands via `command` segments. Project-level configs cannot execute arbitrary code.
+Trusted configs — `~/.oh-my-line/config.json` (global) and `{CLAUDE_CONFIG_DIR}/oh-my-line.json` (per-account) — can run shell commands via `command` segments. Project-level configs cannot execute arbitrary code.

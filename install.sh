@@ -146,6 +146,10 @@ SKILL_DIR="${HOME}/.claude/skills/oh-my-line"
 mkdir -p "${SKILL_DIR}"
 fetch "${SKILL_DIR}/SKILL.md" "skills/oh-my-line/SKILL.md"
 fetch "${SKILL_DIR}/CONFIG-REFERENCE.md" "skills/oh-my-line/CONFIG-REFERENCE.md"
+fetch "${SKILL_DIR}/RELEASE-PROCESS.md" "skills/oh-my-line/RELEASE-PROCESS.md"
+fetch "${SKILL_DIR}/RELEASE-AUDIT.md" "skills/oh-my-line/RELEASE-AUDIT.md"
+# Clean up stale files from previous versions
+rm -f "${SKILL_DIR}/SEGMENT-SPEC.md"
 
 printf '    %b  oh-my-line %bv%s%b installed\n' "$OK" "$DIM" "$NEW_VERSION" "$RST"
 printf '    %b  skill installed to %b%s/%b\n' "$OK" "$DIM" "${SKILL_DIR}" "$RST"

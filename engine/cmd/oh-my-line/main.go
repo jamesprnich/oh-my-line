@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/jamesprnich/oh-my-line/engine/internal"
+	"github.com/jamesprnich/oh-my-line/engine/internal/cache"
 	"github.com/jamesprnich/oh-my-line/engine/internal/config"
 	"github.com/jamesprnich/oh-my-line/engine/internal/datasource"
 	"github.com/jamesprnich/oh-my-line/engine/internal/debug"
@@ -35,12 +37,23 @@ func main() {
 		input.ContextWindow.Size = 200000
 	}
 
-	// Load config
-	conf, err := config.LoadWithProduct(input.CWD)
+	// Resolve account config directory from CLAUDE_CONFIG_DIR
+	configDir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if configDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			configDir = filepath.Join(home, ".claude")
+		}
+	}
+
+	// Load config (configDir enables per-account config lookup)
+	conf, err := config.LoadWithProduct(input.CWD, configDir)
 	if err != nil {
 		fmt.Print(input.Model.DisplayName)
 		return
 	}
+
+	conf.ConfigDir = configDir
+	conf.AccountKey = cache.AccountKey(configDir)
 
 	// Init debug logging: env var OML_DEBUG=1 takes precedence, then config
 	debug.Init(os.Getenv("OML_DEBUG") == "1", conf.Debug)
@@ -83,7 +96,7 @@ func computeRuntimeData(conf *internal.Config, input *internal.Input) *internal.
 	// Burn rate
 	if types["burn-min"] || types["burn-hr"] || types["burn-spark"] ||
 		types["cost-min"] || types["cost-hr"] {
-		burn := datasource.ComputeBurnRate(input.CurrentTokens())
+		burn := datasource.ComputeBurnRate(input.CurrentTokens(), conf.AccountKey)
 		rt.BurnRateMin = burn.RateMin
 		rt.BurnRateHr = burn.RateHr
 		rt.BurnElapsed = burn.Elapsed
@@ -100,7 +113,7 @@ func computeRuntimeData(conf *internal.Config, input *internal.Input) *internal.
 		if proxyURL == "" {
 			proxyURL = conf.UsageProxy["claudeCode"]
 		}
-		rl := datasource.FetchRateLimits(proxyURL)
+		rl := datasource.FetchRateLimits(proxyURL, conf.AccountKey, conf.ConfigDir)
 		rt.RateSession = datasource.RenderRateLimitSegment("rate-session", rl, barStyles["rate-session"], resolveShowReset(showResets, "rate-session", true))
 		rt.RateWeekly = datasource.RenderRateLimitSegment("rate-weekly", rl, barStyles["rate-weekly"], resolveShowReset(showResets, "rate-weekly", false))
 		rt.RateExtra = datasource.RenderRateLimitSegment("rate-extra", rl, barStyles["rate-extra"], false)
@@ -119,7 +132,7 @@ func computeRuntimeData(conf *internal.Config, input *internal.Input) *internal.
 			eta := datasource.ComputeETAs(rl.SessionPctRaw, rl.WeeklyPctRaw,
 				rl.SessionReset, rl.WeeklyReset,
 				datasource.DefaultShortWindowSecs, datasource.DefaultLongWindowSecs,
-				rl.ShortLabel, rl.LongLabel)
+				rl.ShortLabel, rl.LongLabel, conf.AccountKey)
 			rt.ETASession = datasource.RenderETASegment("eta-session", eta, rl.ShortLabel, rl.LongLabel)
 			rt.ETASessionMin = datasource.RenderETASegment("eta-session-min", eta, rl.ShortLabel, rl.LongLabel)
 			rt.ETASessionHr = datasource.RenderETASegment("eta-session-hr", eta, rl.ShortLabel, rl.LongLabel)
@@ -138,7 +151,7 @@ func computeRuntimeData(conf *internal.Config, input *internal.Input) *internal.
 		}
 		sessionPct := int(rt.SessionPct)
 		spark := datasource.ComputeSparklines(rt.BurnRateMin, ctxPct, sessionPct,
-			datasource.DefaultShortWindowSecs, datasource.DefaultLongWindowSecs)
+			datasource.DefaultShortWindowSecs, datasource.DefaultLongWindowSecs, conf.AccountKey)
 		rt.BurnSpark = spark.BurnSpark
 		rt.CtxSpark = spark.CtxSpark
 		rt.RateSpark = spark.RateSpark
@@ -154,6 +167,7 @@ func computeRuntimeData(conf *internal.Config, input *internal.Input) *internal.
 			input.ContextWindow.Usage.CacheCreate,
 			input.ContextWindow.Usage.CacheRead,
 			rt.BurnRateMin, rt.BurnRateHr,
+			conf.AccountKey,
 		)
 		rt.CostCtx = datasource.RenderCostSegment("cost", cost)
 		rt.CostMin = datasource.RenderCostSegment("cost-min", cost)
@@ -202,17 +216,20 @@ func computeRuntimeData(conf *internal.Config, input *internal.Input) *internal.
 	}
 
 	// Command segments
-	if types["command"] && conf.Trusted {
-		rt.CommandCache = make(map[string]string)
+	if types["command"] {
+		var specs []datasource.CommandSpec
 		for _, line := range conf.Lines {
 			for _, seg := range line.Segments {
-				if seg.Type == "command" && seg.Content != "" {
-					if _, done := rt.CommandCache[seg.Content]; !done {
-						rt.CommandCache[seg.Content] = datasource.ExecCommand(seg.Content, seg.Cache, seg.Timeout)
-					}
+				if seg.Type == "command" {
+					specs = append(specs, datasource.CommandSpec{
+						Content: seg.Content,
+						Cache:   seg.Cache,
+						Timeout: seg.Timeout,
+					})
 				}
 			}
 		}
+		rt.CommandCache = datasource.BuildCommandCache(conf.Trusted, specs, datasource.ExecCommand)
 	}
 
 	return rt

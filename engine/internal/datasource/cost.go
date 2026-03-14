@@ -36,7 +36,7 @@ var pricingModels = map[string]pricing{
 }
 
 // ComputeCost calculates context cost, burn cost, 7-day totals, and sparkline.
-func ComputeCost(modelName string, inputTokens, cacheCreate, cacheRead, burnRateMin, burnRateHr int) *CostResult {
+func ComputeCost(modelName string, inputTokens, cacheCreate, cacheRead, burnRateMin, burnRateHr int, accountKey string) *CostResult {
 	result := &CostResult{}
 
 	// Determine pricing
@@ -72,6 +72,9 @@ func ComputeCost(modelName string, inputTokens, cacheCreate, cacheRead, burnRate
 	}
 
 	costDir := filepath.Join(home, ".oh-my-line", "cost")
+	if accountKey != "" && accountKey != "default" {
+		costDir = filepath.Join(home, ".oh-my-line", "cost", "acct-"+accountKey)
+	}
 	os.MkdirAll(costDir, 0700)
 
 	now := time.Now()
@@ -79,7 +82,7 @@ func ComputeCost(modelName string, inputTokens, cacheCreate, cacheRead, burnRate
 	todayFile := filepath.Join(costDir, today+".dat")
 
 	// Track delta via per-process baseline
-	cacheDir, err := cache.Dir()
+	cacheDir, err := cache.AccountDir(accountKey)
 	if err != nil {
 		return result
 	}

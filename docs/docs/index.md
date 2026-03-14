@@ -125,9 +125,12 @@ Phase 6: Output          Print final ANSI-formatted string to stdout
 The engine checks for config files in this order:
 
 ```
-{cwd}/oh-my-line.json          ← project config
-~/.oh-my-line/config.json      ← global config
+{cwd}/oh-my-line.json                    ← project config (untrusted)
+{CLAUDE_CONFIG_DIR}/oh-my-line.json       ← per-account config (trusted)
+~/.oh-my-line/config.json                 ← global config (trusted)
 ```
+
+The per-account step is skipped when `CLAUDE_CONFIG_DIR` is unset or is the default (`~/.claude`).
 
 ## Uninstall
 

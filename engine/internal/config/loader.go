@@ -11,8 +11,9 @@ import (
 )
 
 // Load finds and parses the oh-my-line config file.
-// Priority: cwd/oh-my-line.json > ~/.oh-my-line/config.json
-func Load(cwd string) (*internal.Config, error) {
+// Priority: cwd/oh-my-line.json > {configDir}/oh-my-line.json > ~/.oh-my-line/config.json
+// configDir is the resolved CLAUDE_CONFIG_DIR (e.g. ~/.claude). Pass "" to skip per-account lookup.
+func Load(cwd, configDir string) (*internal.Config, error) {
 	home, _ := os.UserHomeDir()
 
 	type candidate struct {
@@ -23,6 +24,19 @@ func Load(cwd string) (*internal.Config, error) {
 	var candidates []candidate
 	if cwd != "" {
 		candidates = append(candidates, candidate{filepath.Join(cwd, "oh-my-line.json"), false})
+	}
+	// Per-account config: oh-my-line.json inside CLAUDE_CONFIG_DIR.
+	// Trusted because the user controls their own config directory.
+	// Skip if configDir is the default ~/.claude (already covered by global fallback)
+	// or if configDir matches cwd (already checked as project config above).
+	if configDir != "" {
+		isDefault := false
+		if home != "" {
+			isDefault = filepath.Clean(configDir) == filepath.Clean(filepath.Join(home, ".claude"))
+		}
+		if !isDefault && filepath.Clean(configDir) != filepath.Clean(cwd) {
+			candidates = append(candidates, candidate{filepath.Join(configDir, "oh-my-line.json"), true})
+		}
 	}
 	if home != "" {
 		candidates = append(candidates, candidate{filepath.Join(home, ".oh-my-line", "config.json"), true})
@@ -107,8 +121,8 @@ func Parse(data []byte) (*internal.Config, error) {
 }
 
 // LoadWithProduct loads config and resolves .product.json references.
-func LoadWithProduct(cwd string) (*internal.Config, error) {
-	conf, err := Load(cwd)
+func LoadWithProduct(cwd, configDir string) (*internal.Config, error) {
+	conf, err := Load(cwd, configDir)
 	if err != nil {
 		return nil, err
 	}

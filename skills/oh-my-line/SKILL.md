@@ -26,13 +26,35 @@ oh-my-line is a **global tool** — installed once, available everywhere. The sk
 | Path | Purpose |
 |------|---------|
 | `~/.oh-my-line/oh-my-line` | Compiled Go binary (the engine) |
-| `~/.oh-my-line/config.json` | Global statusline config |
+| `~/.oh-my-line/config.json` | Global statusline config (**trusted** — can run command segments) |
 | [Builder](https://jamesprnich.github.io/oh-my-line/builder.html) | Visual config builder (hosted) |
 | `~/.oh-my-line/VERSION` | Installed version identifier |
 | `~/.claude/skills/oh-my-line/` | Global skill files (this file + sub-specs) |
 | `~/.claude/settings.json` | Claude Code settings — `statusLine` key |
-| `oh-my-line.json` | Project-level config (overrides global) |
+| `{cwd}/oh-my-line.json` | Project-level config (**untrusted** — overrides global, but cannot run commands) |
+| `/tmp/claude-{uid}/` | Cache dir for default account (burn, rate limits, ETAs, sparklines) |
+| `/tmp/claude-{uid}/acct-{hash}/` | Cache dir for additional accounts (auto-created from `CLAUDE_CONFIG_DIR`) |
+| `~/.oh-my-line/cost/` | Cost data for default account |
+| `~/.oh-my-line/cost/acct-{hash}/` | Cost data for additional accounts |
 | `.product.json` | Shared product identity at repo root |
+
+## Config Lookup & Trust Model
+
+The engine checks for config in this order — first match wins:
+
+| Priority | Path | Trusted | Can run `command` segments |
+|----------|------|---------|---------------------------|
+| 1 | `{cwd}/oh-my-line.json` | No | No — commands silently ignored |
+| 2 | `{CLAUDE_CONFIG_DIR}/oh-my-line.json` | Yes | Yes (per-account config) |
+| 3 | `~/.oh-my-line/config.json` | Yes | Yes |
+
+Step 2 is skipped when `CLAUDE_CONFIG_DIR` is unset or is the default (`~/.claude`).
+
+**Why trust matters:** `command` segments execute arbitrary shell commands (`bash -c "..."`). A cloned repo could contain a malicious `oh-my-line.json` with command segments that run on every prompt. Trusted configs — `~/.oh-my-line/config.json` (global) and `{CLAUDE_CONFIG_DIR}/oh-my-line.json` (per-account) — are safe because the user explicitly controls them. Project-level configs are untrusted by design — they can set layout, segments, and styling, but command segments are silently blocked at render time.
+
+**Multi-project setup** is already supported via project-level `oh-my-line.json` — drop one in any project directory and it takes priority over the global config. Each project can have its own segments, layout, and identity. See the [config docs](https://jamesprnich.github.io/oh-my-line/config/#multi-project-setup) for examples.
+
+**Multi-account setup** is automatic. When `CLAUDE_CONFIG_DIR` is set, the engine isolates cache, OAuth tokens, cost tracking, and settings per account. The default account (`~/.claude`) uses base paths unchanged. Additional accounts get subdirectories (`acct-{hash}/`). No user configuration needed — see the [config docs](https://jamesprnich.github.io/oh-my-line/config/#multi-account-setup) for details.
 
 ## Update Check
 
@@ -173,6 +195,7 @@ echo '{"model":{"display_name":"Test"},"context_window":{"context_window_size":2
 |---------|--------------|
 | Statusline missing | Check `~/.claude/settings.json` has `statusLine` key |
 | Shows "Claude" or model name only | No config found — check file exists and location |
+| Command segment blank | Config is untrusted (project-level) — commands only run from trusted configs |
 | Rate limits empty / "?" | OAuth session issue |
 | Segments showing warning icon | API error — usually transient |
 | ETA segments not showing | Need 2-10 minutes of data collection |
@@ -183,8 +206,9 @@ echo '{"model":{"display_name":"Test"},"context_window":{"context_window_size":2
 
 **Config check:**
 ```bash
-[ -f "$(pwd)/oh-my-line.json" ] && echo "Project: $(pwd)/oh-my-line.json" || \
-[ -f ~/.oh-my-line/config.json ] && echo "Global: ~/.oh-my-line/config.json" || echo "No config"
+[ -f "$(pwd)/oh-my-line.json" ] && echo "Project: $(pwd)/oh-my-line.json"
+[ -n "$CLAUDE_CONFIG_DIR" ] && [ -f "$CLAUDE_CONFIG_DIR/oh-my-line.json" ] && echo "Account: $CLAUDE_CONFIG_DIR/oh-my-line.json"
+[ -f ~/.oh-my-line/config.json ] && echo "Global: ~/.oh-my-line/config.json"
 ```
 
 **Engine test:**
@@ -194,14 +218,17 @@ echo '{"model":{"display_name":"Test"},"context_window":{"context_window_size":2
 
 **Cache state:**
 ```bash
+# Default account
 ls -la /tmp/claude-$(id -u)/statusline-* 2>/dev/null || echo "No cache files"
+# Multi-account subdirs
+ls -la /tmp/claude-$(id -u)/acct-*/statusline-* 2>/dev/null || echo "No multi-account cache"
 ```
 
 ### Step 3: Common fixes
 
 - **Missing config** → run `/oh-my-line install`
 - **Invalid JSON** → fix syntax, show user what was wrong
-- **Cache stale** → `rm /tmp/claude-$(id -u)/statusline-*.dat /tmp/claude-$(id -u)/statusline-*.json`
+- **Cache stale** → `rm -f /tmp/claude-$(id -u)/statusline-*.dat /tmp/claude-$(id -u)/statusline-*.json` (add `rm -rf /tmp/claude-$(id -u)/acct-*` for multi-account)
 - **Binary not running** → check `~/.oh-my-line/oh-my-line` exists and is executable (`chmod +x`)
 - **OAuth missing** → restart Claude Code, log in fresh
 

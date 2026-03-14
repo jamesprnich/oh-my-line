@@ -27,10 +27,10 @@ type SparkResult struct {
 }
 
 // ComputeSparklines computes sparkline segments.
-func ComputeSparklines(burnRateMin, ctxPct, sessionPct int, shortSecs, longSecs int) *SparkResult {
+func ComputeSparklines(burnRateMin, ctxPct, sessionPct int, shortSecs, longSecs int, accountKey string) *SparkResult {
 	result := &SparkResult{}
 
-	cacheDir, err := cache.Dir()
+	cacheDir, err := cache.AccountDir(accountKey)
 	if err != nil {
 		return result
 	}

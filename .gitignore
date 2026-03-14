@@ -24,3 +24,4 @@ engine/oh-my-line
 engine/renderer.wasm
 *.wasm
 *.wasm.bak
+.vscode-screenshots/

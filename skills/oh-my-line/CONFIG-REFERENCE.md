@@ -4,7 +4,11 @@ Segment types, config options, line styles, and Nerd Font icons. Read this when 
 
 ## Config Format
 
-Config lives in `oh-my-line.json` (project-level) or `~/.oh-my-line/config.json` (global). Project-level overrides global when present.
+Config lookup order (first match wins):
+
+1. `{cwd}/oh-my-line.json` — project config (untrusted, cannot run `command` segments)
+2. `{CLAUDE_CONFIG_DIR}/oh-my-line.json` — per-account config (trusted, skipped when unset or default `~/.claude`)
+3. `~/.oh-my-line/config.json` — global config (trusted)
 
 ```json
 {

@@ -16,14 +16,14 @@ type BurnResult struct {
 }
 
 // ComputeBurnRate calculates token burn rate from the cache file.
-func ComputeBurnRate(currentTokens int) *BurnResult {
+func ComputeBurnRate(currentTokens int, accountKey string) *BurnResult {
 	result := &BurnResult{}
 
 	if currentTokens <= 0 {
 		return result
 	}
 
-	cacheDir, err := cache.Dir()
+	cacheDir, err := cache.AccountDir(accountKey)
 	if err != nil {
 		return result
 	}

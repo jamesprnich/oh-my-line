@@ -24,11 +24,11 @@ type ETAResult struct {
 
 // ComputeETAs calculates ETA using 3 methods for both windows.
 func ComputeETAs(sessionPctRaw, weeklyPctRaw float64, sessionReset, weeklyReset string,
-	shortSecs, longSecs int, shortLabel, longLabel string) *ETAResult {
+	shortSecs, longSecs int, shortLabel, longLabel, accountKey string) *ETAResult {
 
 	result := &ETAResult{}
 
-	cacheDir, err := cache.Dir()
+	cacheDir, err := cache.AccountDir(accountKey)
 	if err != nil {
 		return result
 	}

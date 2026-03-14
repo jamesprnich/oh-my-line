@@ -217,5 +217,7 @@ type Config struct {
 	Trusted          bool                 `json:"-"`
 	EmitMarkers      bool                 `json:"-"`
 	TermWidth        int                  `json:"-"`
+	AccountKey       string               `json:"-"` // derived from CLAUDE_CONFIG_DIR
+	ConfigDir        string               `json:"-"` // resolved CLAUDE_CONFIG_DIR path
 	Runtime          *RuntimeData         `json:"-"`
 }

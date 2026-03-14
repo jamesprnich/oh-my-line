@@ -221,7 +221,7 @@ func renderSegmentContent(seg internal.SegmentConf, input *internal.Input, conf 
 		return pre + fmt.Sprintf("%d%%", pct) + post + " " + DIM + "remain" + RST
 
 	case "effort":
-		return renderEffort(pre, post)
+		return renderEffort(pre, post, conf.ConfigDir)
 
 	case "cost":
 		// If runtime data has computed cost, use it (pricing model based)
@@ -695,13 +695,12 @@ func renderVimMode(input *internal.Input) string {
 }
 
 // renderEffort renders the effort segment.
-func renderEffort(pre, post string) string {
+func renderEffort(pre, post, configDir string) string {
 	level := os.Getenv("CLAUDE_CODE_EFFORT_LEVEL")
 	if level == "" {
 		// Try reading from settings
-		home, _ := os.UserHomeDir()
-		if home != "" {
-			data, err := os.ReadFile(filepath.Join(home, ".claude", "settings.json"))
+		if configDir != "" {
+			data, err := os.ReadFile(filepath.Join(configDir, "settings.json"))
 			if err == nil {
 				// Simple extraction — avoid json dependency for one field
 				level = extractJSONString(string(data), "effortLevel")

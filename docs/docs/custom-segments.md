@@ -18,7 +18,7 @@ The command runs via `bash -c` (or `sh -c` if bash isn't available). If it error
 
 !!! warning "Trusted configs only"
 
-    Command segments only run from the global config (`~/.oh-my-line/config.json`). Project-level configs (`oh-my-line.json`) cannot execute shell commands — this prevents untrusted repos from running arbitrary code.
+    Command segments only run from trusted configs — `~/.oh-my-line/config.json` (global) and `{CLAUDE_CONFIG_DIR}/oh-my-line.json` (per-account). Project-level configs cannot execute shell commands — this prevents untrusted repos from running arbitrary code.
 
 ## Examples
 

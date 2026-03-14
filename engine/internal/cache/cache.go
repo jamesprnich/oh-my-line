@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,6 +34,43 @@ func Dir() (string, error) {
 	}
 
 	if err := os.Mkdir(d, 0700); err != nil {
+		return "", err
+	}
+	return d, nil
+}
+
+// AccountKey derives a short account identifier from CLAUDE_CONFIG_DIR.
+// Returns "default" for ~/.claude or empty (backward compat).
+func AccountKey(configDir string) string {
+	if configDir == "" {
+		return "default"
+	}
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		defaultDir := filepath.Join(home, ".claude")
+		// Normalize both paths for comparison
+		cleanConfig := filepath.Clean(configDir)
+		cleanDefault := filepath.Clean(defaultDir)
+		if cleanConfig == cleanDefault {
+			return "default"
+		}
+	}
+	h := sha256.Sum256([]byte(configDir))
+	return fmt.Sprintf("%x", h[:4]) // 8 hex chars
+}
+
+// AccountDir returns a per-account cache subdirectory.
+// "default" or "" returns the base Dir() unchanged. Others get acct-{key}/ subdirectory.
+func AccountDir(accountKey string) (string, error) {
+	base, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	if accountKey == "" || accountKey == "default" {
+		return base, nil
+	}
+	d := filepath.Join(base, "acct-"+accountKey)
+	if err := os.MkdirAll(d, 0700); err != nil {
 		return "", err
 	}
 	return d, nil

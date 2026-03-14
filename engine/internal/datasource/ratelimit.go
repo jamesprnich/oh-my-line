@@ -80,10 +80,10 @@ const (
 
 // FetchRateLimits fetches and parses rate limit data with caching.
 // If proxyURL is non-empty, it fetches from the proxy with a plain GET (no auth headers).
-func FetchRateLimits(proxyURL string) *RateLimitResult {
+func FetchRateLimits(proxyURL, accountKey, configDir string) *RateLimitResult {
 	result := &RateLimitResult{}
 
-	cacheDir, err := cache.Dir()
+	cacheDir, err := cache.AccountDir(accountKey)
 	if err != nil {
 		return result
 	}
@@ -176,7 +176,7 @@ func FetchRateLimits(proxyURL string) *RateLimitResult {
 		}
 
 		debug.Log("rate", "launching bg-fetch source=%s", src)
-		launchBGRefresh(cacheDir, pidFile, tmpFile, errFile, proxyURL)
+		launchBGRefresh(cacheDir, pidFile, tmpFile, errFile, proxyURL, configDir)
 	}
 
 	if usageData == nil {
@@ -244,7 +244,7 @@ func FetchRateLimits(proxyURL string) *RateLimitResult {
 	return result
 }
 
-func launchBGRefresh(cacheDir, pidFile, tmpFile, errFile, proxyURL string) {
+func launchBGRefresh(cacheDir, pidFile, tmpFile, errFile, proxyURL, configDir string) {
 	// Check if already running (reuses shouldLaunchBG from github.go)
 	if !shouldLaunchBG(pidFile) {
 		return
@@ -268,11 +268,11 @@ func launchBGRefresh(cacheDir, pidFile, tmpFile, errFile, proxyURL string) {
 		url = strings.TrimRight(proxyURL, "/") + "/api/proxy/anthropic/subscription/"
 		curlArgs = []string{"-s", "-m", "8", "-o", stageFile, url}
 	} else {
-		token := GetOAuthToken()
+		token := GetOAuthToken(configDir)
 		if token == "" {
 			return
 		}
-		ccVersion := getClaudeVersion(cacheDir)
+		ccVersion := getClaudeVersion()
 		url = "https://api.anthropic.com/api/oauth/usage"
 		// Pass auth header via curl config file to avoid token exposure
 		// in /proc/*/cmdline.
@@ -316,7 +316,11 @@ func launchBGRefresh(cacheDir, pidFile, tmpFile, errFile, proxyURL string) {
 	os.WriteFile(pidFile, []byte(strconv.Itoa(cmd.Process.Pid)), 0600)
 }
 
-func getClaudeVersion(cacheDir string) string {
+func getClaudeVersion() string {
+	cacheDir, err := cache.Dir()
+	if err != nil {
+		return "unknown"
+	}
 	vcPath := filepath.Join(cacheDir, "statusline-version.txt")
 	if content, fresh := cache.ReadFile(vcPath, 3600); fresh && content != "" {
 		return strings.TrimSpace(content)
